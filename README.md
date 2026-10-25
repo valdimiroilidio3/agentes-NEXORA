@@ -120,8 +120,8 @@ still runs and the floor/room navigation, task board and inspector remain fully 
 - Meetings are real: management roles convene on their own floor, seats are allocated deterministically from the chairs
   actually placed around the meeting table (no two colleagues on one chair, everyone oriented toward the table), and the
   agent walks there, sits, stays for the meeting and walks back.
-- **Idle colleagues get up.** Every ~5 minutes, staggered per agent, an idle colleague stands, walks to the lounge (or
-  the corridor by the lift on floors without one), stands there for half a minute and walks back to the chair. A task
+- **Idle colleagues get up.** Every few minutes (staggered per agent, 45 s out of a 210 s cycle), an idle colleague stands, walks to the lounge (or
+  the corridor by the lift on floors without one), stands there for 45 s and walks back to the chair. A task
   that arrives mid-break wins immediately.
 - One scheduler (`src/scene/character/activitySystem.ts`) advances all 27 machines per frame (~0.06 ms per frame in the
   test harness), then the single rig callback poses the bodies: no per-agent render loop, no React re-render during

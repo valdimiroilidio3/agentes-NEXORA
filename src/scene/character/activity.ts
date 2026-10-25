@@ -308,9 +308,13 @@ export interface BreakSlot {
   readonly label: string;
 }
 
-/** One break cycle per colleague, staggered; breaks last roughly half a minute. */
-export const BREAK_CYCLE = 300;
-export const BREAK_LENGTH = 34;
+/**
+ * One break cycle per colleague, staggered. 45 s out of 210 s means roughly one
+ * colleague in five is away from their desk at any moment, which is what makes
+ * a floor read as an office rather than a row of statues.
+ */
+export const BREAK_CYCLE = 210;
+export const BREAK_LENGTH = 45;
 
 /**
  * Where a colleague stretches their legs: the lounge coffee table when the

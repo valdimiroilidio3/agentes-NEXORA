@@ -332,8 +332,7 @@ activity is steady. Textures are `LinearFilter` with no mipmaps and are disposed
 
 ### Breaks and circulation
 
-Idle colleagues do not stay seated forever. `breakPlan` gives every agent a staggered window (a 34 s break inside a
-300 s cycle, offset by its id seed), and `breakSpot` picks a real place to stand: beside the lounge coffee table when the
+Idle colleagues do not stay seated forever. `breakPlan` gives every agent a staggered window (a 45 s break inside a 210 s cycle, offset by its id seed), and `breakSpot` picks a real place to stand: beside the lounge coffee table when the
 floor has a lounge, otherwise the corridor band by the lift core, spread over a few metres so two colleagues never share
 a spot. The FSM sequence is the same as any other trip — `STANDING_UP → WALKING → IDLE` (standing) → `STANDING_UP →
 WALKING → SITTING_DOWN` — and a task arriving mid-break takes precedence immediately.
