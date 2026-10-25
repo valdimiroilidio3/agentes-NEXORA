@@ -11,12 +11,14 @@
  */
 import type { Agent, Building } from '@/domain/types';
 import {
+  breakPlan,
   createActivity,
   destinationId,
   meetingPlan,
   stepActivity,
   type ActivityContext,
   type AgentActivity,
+  type BreakSlot,
   type MeetingSlot,
 } from './activity';
 
@@ -114,19 +116,25 @@ export function stepActivities(dt: number): void {
   // the per-frame cost flat while staying reactive.
   meetingTimer += step;
   let plan: Map<string, MeetingSlot> | null = null;
+  let breaks: Map<string, BreakSlot> | null = null;
   if (meetingTimer >= 2) {
     meetingTimer = 0;
     const roster = known.map((context) => context.agent);
     if (meetingSource) plan = meetingSource(clock, roster);
     else if (buildingHolder) plan = meetingPlan(buildingHolder, roster, clock);
     else plan = new Map();
+    if (breakSource) breaks = breakSource(clock, roster);
+    else breaks = buildingHolder ? breakPlan(buildingHolder, roster, clock) : new Map();
   }
 
   for (const context of known) {
     const current = activities.get(context.agent.id);
     if (!current) continue;
     const meeting = plan ? (plan.get(context.agent.id) ?? null) : context.meeting;
-    const nextContext: ActivityContext = { ...context, meeting };
+    const breakSlot = breaks
+      ? (breaks.get(context.agent.id) ?? null)
+      : (context.break ?? null);
+    const nextContext: ActivityContext = { ...context, meeting, break: breakSlot };
     contexts.set(context.agent.id, nextContext);
     activities.set(
       context.agent.id,
@@ -167,6 +175,15 @@ export function setMeetingSource(source: MeetingSource | null): void {
   meetingSource = source;
 }
 
+export type BreakSource = (elapsed: number, agents: readonly Agent[]) => Map<string, BreakSlot>;
+
+let breakSource: BreakSource | null = null;
+
+/** Replace the break schedule (tests, or a future policy/calendar feed). */
+export function setBreakSource(source: BreakSource | null): void {
+  breakSource = source;
+}
+
 export function resetActivities(): void {
   activities.clear();
   contexts.clear();
@@ -174,5 +191,6 @@ export function resetActivities(): void {
   clock = 0;
   meetingTimer = 0;
   buildingHolder = null;
-  meetingSource = null;
+  // Injected schedules are configuration, not state: they survive a reset so a
+  // test or a host app can install them once.
 }

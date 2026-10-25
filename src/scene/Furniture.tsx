@@ -78,6 +78,12 @@ function Desk({ scale = 1 }: { scale?: number }) {
         )),
       )}
       <B pos={[0, h - 0.18, -d / 2 + 0.06]} size={[w - 0.2, 0.3, 0.03]} mat="darkMetal" />
+      {/* Working clutter: keyboard, mouse, mug, papers. A desk in use is not
+          a bare plane, and these read as "somebody works here". */}
+      <B pos={[-0.06, h + 0.035, 0.16]} size={[0.42, 0.022, 0.14]} mat="darkMetal" />
+      <B pos={[0.28, h + 0.03, 0.17]} size={[0.07, 0.02, 0.11]} mat="black" />
+      <Cyl pos={[-0.52, h + 0.075, 0.1]} size={[0.07, 0.09, 0.07]} mat="white" />
+      <B pos={[0.42, h + 0.033, -0.02]} size={[0.3, 0.008, 0.22]} mat="white" />
     </group>
   );
 }

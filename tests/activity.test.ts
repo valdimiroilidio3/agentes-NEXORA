@@ -12,6 +12,10 @@ import tasksData from '@/data/tasks.json';
 import type { Agent, Task } from '@/domain/types';
 import {
   ACTIVITY_KINDS,
+  BREAK_CYCLE,
+  BREAK_LENGTH,
+  breakPlan,
+  breakSpot,
   MEETING_CYCLE,
   MEETING_LENGTH,
   ROLE_ACTIVITIES,
@@ -352,6 +356,85 @@ describe('meeting rooms', () => {
     const back = run(over.activity, contextFor(agentId, { atDestination: true }), 8);
     expect(back.seen).toContain('SITTING_DOWN');
     expect(back.activity.activity).toBe('IDLE');
+  });
+});
+
+describe('breaks and circulation', () => {
+  const groundFloor = building.floors[0]!;
+  const techFloor = building.floors[3]!;
+
+  it('uses the lounge coffee table where there is one, the corridor otherwise', () => {
+    const lounge = groundFloor.rooms.find((room) => room.template === 'lounge');
+    expect(lounge).toBeDefined();
+    const spot = breakSpot(building, groundFloor, 'agent-lyra')!;
+    expect(spot.roomId).toBe(lounge!.id);
+    expect(spot.label).toBe('Lounge');
+    const table = lounge!.furniture.find((item) => item.kind === 'coffee-table')!;
+    expect(Math.hypot(spot.point.x - table.position.x, spot.point.z - table.position.z)).toBeLessThan(1.6);
+
+    expect(techFloor.rooms.some((room) => room.template === 'lounge')).toBe(false);
+    const corridor = breakSpot(building, techFloor, 'agent-nova')!;
+    expect(corridor.label).toBe('Corridor');
+    expect(Math.abs(corridor.point.z)).toBeLessThan(1.8);
+  });
+
+  it('gives two colleagues different squares to stand on', () => {
+    const a = breakSpot(building, techFloor, 'agent-nova')!;
+    const b = breakSpot(building, techFloor, 'agent-kernel')!;
+    expect(Math.hypot(a.point.x - b.point.x, a.point.z - b.point.z)).toBeGreaterThan(0.2);
+  });
+
+  it('schedules staggered windows and skips offline colleagues', () => {
+    const plan = new Map<string, ReturnType<typeof breakPlan> extends Map<string, infer T> ? T : never>();
+    for (let elapsed = 0; elapsed < BREAK_CYCLE; elapsed += 5) {
+      for (const [id, slot] of breakPlan(building, agents, elapsed)) {
+        plan.set(id, slot);
+        expect(slot.endAt - elapsed).toBeLessThanOrEqual(BREAK_LENGTH);
+      }
+      expect(breakPlan(building, agents, elapsed).has('agent-sentinel')).toBe(false);
+    }
+    expect(plan.size).toBeGreaterThan(5);
+  });
+
+  it('walks an idle colleague out of the chair, stands on the break spot, and comes back', () => {
+    const base = contextFor('agent-nova', {
+      task: null,
+      agent: { ...contextFor('agent-nova').agent, status: 'IDLE', currentTaskId: null },
+    });
+    const slot = breakSpot(building, techFloor, 'agent-nova')!;
+    const onBreak = { ...slot, startAt: 0, endAt: 40 };
+    const ctx: ActivityContext = { ...base, break: onBreak, atDestination: false };
+
+    let activity = createActivity(ctx);
+    activity = run(activity, ctx, 0.25).activity;
+    expect(activity.activity).toBe('STANDING_UP');
+    const walking = run(activity, ctx, 1).activity;
+    expect(walking.activity).toBe('WALKING');
+    expect(walking.destination.kind).toBe('break');
+    expect(walking.destination.point).toEqual(slot.point);
+
+    const standing = stepActivity(walking, { ...ctx, atDestination: true }, 0.1);
+    expect(standing.activity).toBe('IDLE');
+    expect(standing.animation.posture).toBe('STANDING');
+    expect(standing.label).toBe('On a short break');
+    const held = run(standing, { ...ctx, atDestination: true }, 10).activity;
+    expect(held.label).toBe('On a short break');
+
+    // Break over: stand, walk home, sit.
+    const over = run(held, { ...base, atDestination: false }, 2).activity;
+    expect(over.destination.kind).toBe('workstation');
+    expect(['STANDING_UP', 'WALKING']).toContain(over.activity);
+    const back = run(over, { ...base, atDestination: true }, 8).activity;
+    expect(['SITTING_DOWN', 'SITTING', 'IDLE']).toContain(back.activity);
+  });
+
+  it('does not take a break while a task is running', () => {
+    const ctx = contextFor('agent-atria');
+    const slot = breakSpot(building, techFloor, 'agent-atria')!;
+    const busy = { ...ctx, break: { ...slot, startAt: 0, endAt: 60 } };
+    const activity = run(createActivity(busy), busy, 5).activity;
+    expect(activity.destination.kind).toBe('workstation');
+    expect(activity.label).not.toBe('On a short break');
   });
 });
 

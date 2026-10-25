@@ -12,6 +12,7 @@ import { useEffect, useMemo } from 'react';
 import type { Building, Floor, Room } from '@/domain/types';
 import type { OperationsState } from '@/domain/operations';
 import { AgentCharacter, OfficeChair } from './AgentCharacter';
+import { DeskScreen } from './DeskScreen';
 import { appearanceFor } from './appearance';
 import { behaviourFor } from './behaviour';
 import { activityFor, setActivityBuilding, syncActivities } from './activitySystem';
@@ -108,6 +109,14 @@ export function AgentLayer({
 
         return (
           <group key={agent.id}>
+            {homeVisible && detail === 'full' && (
+              <DeskScreen
+                agent={agent}
+                room={entry.room}
+                workstation={workstation}
+                task={task}
+              />
+            )}
             {homeVisible && (
               <OfficeChair
                 appearance={appearance}

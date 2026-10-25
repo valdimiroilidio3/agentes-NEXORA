@@ -240,7 +240,8 @@ chair without being re-parented; `SceneWorld` mounts `CharacterAnimator` and sel
 ### Next improvement stage (stage 2)
 
 Stage 2 (section 11) gives the workforce somewhere to go: a real navigation grid, journeys through doors, corridors and
-lifts, and an autonomous activity machine per colleague. Architecture/furniture/lighting refinement becomes stage 3.
+lifts, and an autonomous activity machine per colleague. Stage 3 (section 12) puts what they are doing on their monitors
+and gives idle colleagues a life away from the desk.
 
 ## 11. Improvement stage 2 — movement and autonomous activities (this iteration)
 
@@ -328,3 +329,40 @@ lifts, and an autonomous activity machine per colleague. Architecture/furniture/
 - **Off-screen rigs are not culled**: hidden floors unmount their characters (so their machines keep running but no
   meshes exist), yet a visible floor still animates every occupant. Reducing the update rate for agents outside the
   camera frustum is the next optimisation, not something claimed here.
+
+## 12. Improvement stage 3 — live monitors and office life (this iteration)
+
+### What was added
+
+| Feature | Implementation |
+| --- | --- |
+| Monitors show what each colleague is doing | `scene/character/deskScreens.ts` composes the wording and paints a 320 × 180 canvas per workstation; `DeskScreen.tsx` renders it 24 mm in front of the monitor glass |
+| Real-time, without re-rendering React | one registry, repainted by the shared frame loop only when the content key changes (max once per 400 ms per screen) |
+| Honest content | name, role, room, status, activity + reason, task title and status, destination (desk / meeting room / on break), wall clock; offline, blocked and failed states say so |
+| Desks that read as workplaces | keyboard, mouse, mug and papers modelled on every desk |
+| Life away from the desk | staggered breaks (`breakPlan`), real destinations (`breakSpot`: lounge coffee table, else the corridor by the lift), walked out and back by the same FSM |
+| Precedence | a running task cancels a break; meetings still win; nothing teleports |
+
+### Measured results (this stage)
+
+| Check | Result |
+| --- | --- |
+| `npx tsc --noEmit` | clean |
+| `npx vitest run` | 198 passed / 198 across 14 files |
+| Screen wording | 4 tests over `screenContentFor`: identity, status, activity, task, clock format, destination labels, honest "no behaviour state" |
+| Screens in the scene (headless R3F) | one screen mesh per colleague, registry matches, canvas painted with the real activity label, textures released on unmount |
+| Breaks | lounge vs corridor spot selection, distinct spots per colleague, staggered windows that skip offline agents, full walk-out / stand / walk-back sequence, no break while a task runs |
+| Movement after this stage | 27 agents: desk work, meetings, breaks, relocations; every trip is a planned route |
+
+### Honest limitations of this stage
+
+- **Still no visual review.** Everything above is verified through unit tests, headless scene-graph tests and measured
+  timings. Text size and contrast on a 1 m monitor at a distance has not been judged by eye; the canvas is 320 × 180, so
+  at close range the text is crisp but at 20 m it is simply a lit rectangle.
+- **Screens are per-monitor textures**, not a shared atlas: ~4 MB of texture memory for a full floor, freed when the
+  floor is hidden. A single atlas is the next step if the workforce grows.
+- **Breaks are a simulation policy**, not HR data: they exist to make the office feel alive and are not recorded as work.
+- **Screen content is a summary**, not the real UI of the agent's tools: it reports the operational state NEXORA actually
+  holds, not a fake terminal.
+- **No social interaction yet**: colleagues on a break stand on their own spot and do not turn to talk to each other.
+  Pair conversations are the obvious next step.

@@ -321,6 +321,23 @@ every rig. The rig compares the activity destination with its own plan, plans a 
 reports arrival (which is what lets the machine move on from `WALKING`), and blends joints with an exponential damping
 (`1 − e^(−14·dt)`) so pose changes cross-fade instead of snapping. 27 agents cost ≈ 0.06 ms per frame in the harness.
 
+### Desk screens
+
+Each workstation monitor carries a plane 24 mm in front of the glass, textured from a 320 × 180 canvas
+(`scene/character/deskScreens.ts`). The wording comes from `screenContentFor`, a pure function over the agent, its task,
+the room and the live activity — so what a screen says is testable without a canvas. Painting is throttled twice: only
+when the content key changes, and at most once per 400 ms per screen, with the clock as the only part that moves while an
+activity is steady. Textures are `LinearFilter` with no mipmaps and are disposed when the agent unmounts. The compact
+(cutaway) tier renders no screens, which keeps the overview cheap.
+
+### Breaks and circulation
+
+Idle colleagues do not stay seated forever. `breakPlan` gives every agent a staggered window (a 34 s break inside a
+300 s cycle, offset by its id seed), and `breakSpot` picks a real place to stand: beside the lounge coffee table when the
+floor has a lounge, otherwise the corridor band by the lift core, spread over a few metres so two colleagues never share
+a spot. The FSM sequence is the same as any other trip — `STANDING_UP → WALKING → IDLE` (standing) → `STANDING_UP →
+WALKING → SITTING_DOWN` — and a task arriving mid-break takes precedence immediately.
+
 ### What is deliberately not here
 
 No animation clips, no GLB assets, no skinning, no physics engine, no third-party pathfinding. Nothing is fetched at

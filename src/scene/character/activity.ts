@@ -13,6 +13,7 @@
 import type { Agent, AgentStatus, Building, Floor, Room, Task, Vec2 } from '@/domain/types';
 import type { SeatedActivity, StandingActivity } from './pose';
 import { hashString, seededRandom } from './appearance';
+import { liftAnchor } from './navigation';
 
 /* ------------------------------------------------------------------ */
 /* Vocabulary                                                          */
@@ -294,6 +295,105 @@ export function meetingPlan(
 }
 
 /* ------------------------------------------------------------------ */
+/* Breaks                                                              */
+/* ------------------------------------------------------------------ */
+
+export interface BreakSlot {
+  readonly floorId: string;
+  readonly roomId: string;
+  readonly point: Vec2;
+  readonly facing: number;
+  readonly startAt: number;
+  readonly endAt: number;
+  readonly label: string;
+}
+
+/** One break cycle per colleague, staggered; breaks last roughly half a minute. */
+export const BREAK_CYCLE = 300;
+export const BREAK_LENGTH = 34;
+
+/**
+ * Where a colleague stretches their legs: the lounge coffee table when the
+ * floor has one, otherwise the corridor by the lift core. Deterministic per
+ * agent, so two colleagues on break do not occupy the same square metre.
+ */
+export function breakSpot(building: Building, floor: Floor, agentId: string): BreakSlot | null {
+  const random = seededRandom(hashString(`break-spot:${agentId}`));
+  const lounge = floor.rooms.find((room) => room.template === 'lounge');
+  if (lounge) {
+    const anchor =
+      lounge.furniture.find((item) => item.kind === 'coffee-table') ??
+      lounge.furniture.find((item) => item.kind === 'sofa');
+    const centre = anchor ? anchor.position : { x: lounge.rect.x, z: lounge.rect.z };
+    const angle = random() * Math.PI * 2;
+    const radius = 1.05;
+    const point = {
+      x: centre.x + Math.cos(angle) * radius,
+      z: centre.z + Math.sin(angle) * radius,
+    };
+    return {
+      floorId: floor.id,
+      roomId: lounge.id,
+      point,
+      facing: Math.atan2(centre.x - point.x, centre.z - point.z),
+      startAt: 0,
+      endAt: 0,
+      label: 'Lounge',
+    };
+  }
+  const anchor = liftAnchor(floor);
+  if (!anchor) return null;
+  const core = floor.rooms.find((room) => room.template === 'core') ?? floor.rooms[0];
+  if (!core) return null;
+  // A short walk down the corridor, spread over a few metres of its length.
+  const offset = (random() - 0.5) * 5;
+  // Stand off the traffic lane, still inside the 3.6 m corridor band.
+  const point = { x: anchor.x + offset, z: 0.95 };
+  return {
+    floorId: floor.id,
+    roomId: core.id,
+    point,
+    facing: offset >= 0 ? -Math.PI / 2 : Math.PI / 2,
+    startAt: 0,
+    endAt: 0,
+    label: 'Corridor',
+  };
+}
+
+/**
+ * Break windows for the whole workforce. Only colleagues who are not offline,
+ * failed or holding a task ever leave their desk for one (the FSM re-checks the
+ * task, so a job that arrives mid-break wins).
+ */
+export function breakPlan(
+  building: Building,
+  agents: readonly Agent[],
+  elapsed: number,
+): Map<string, BreakSlot> {
+  const plan = new Map<string, BreakSlot>();
+  if (elapsed < 0) return plan;
+  for (const agent of agents) {
+    if (agent.status === 'OFFLINE' || agent.status === 'ERROR') continue;
+    const offset = Math.floor(
+      seededRandom(hashString(`break:${agent.id}`))() * (BREAK_CYCLE - BREAK_LENGTH - 40),
+    );
+    const window = elapsed - offset;
+    if (window < 0) continue;
+    const cycle = Math.floor(window / BREAK_CYCLE);
+    const local = window - cycle * BREAK_CYCLE;
+    if (local > BREAK_LENGTH) continue;
+    const floor = building.floors.find((item) =>
+      item.rooms.some((room) => room.id === agent.roomId),
+    );
+    if (!floor) continue;
+    const spot = breakSpot(building, floor, agent.id);
+    if (!spot) continue;
+    plan.set(agent.id, { ...spot, startAt: elapsed, endAt: elapsed + (BREAK_LENGTH - local) });
+  }
+  return plan;
+}
+
+/* ------------------------------------------------------------------ */
 /* Activity state                                                      */
 /* ------------------------------------------------------------------ */
 
@@ -305,7 +405,7 @@ export interface ActivityEvent {
 }
 
 export interface ActivityDestination {
-  readonly kind: 'workstation' | 'meeting';
+  readonly kind: 'workstation' | 'meeting' | 'break';
   readonly floorId: string;
   readonly roomId: string;
   readonly point: Vec2;
@@ -321,6 +421,7 @@ export interface ActivityContext {
   readonly homeSeat: Vec2;
   readonly homeFacing: number;
   readonly meeting: MeetingSlot | null;
+  readonly break?: BreakSlot | null;
   /**
    * Whether the body has reached the activity destination. Movement is owned
    * by the nav/journey layer, which reports arrival truthfully; the FSM only
@@ -376,6 +477,34 @@ export function destinationId(destination: ActivityDestination): string {
   ].join('|');
 }
 
+const BREAK_ANIMATION: ActivityAnimation = {
+  seated: 'IDLE_SEATED',
+  standing: 'IDLE_STANDING',
+  posture: 'STANDING',
+};
+
+/**
+ * Pose for an activity at a destination. Standing somewhere that is not a
+ * desk (a lounge sofa, the corridor by the lift) must not read as sitting.
+ */
+export function animationForDestination(
+  destination: ActivityDestination,
+  kind: ActivityKind,
+): ActivityAnimation {
+  return destination.kind === 'break' ? BREAK_ANIMATION : animationFor(kind);
+}
+
+function breakDestination(ctx: ActivityContext, slot: BreakSlot): ActivityDestination {
+  return {
+    kind: 'break',
+    floorId: slot.floorId,
+    roomId: slot.roomId,
+    point: slot.point,
+    facing: slot.facing,
+    chairId: null,
+  };
+}
+
 function homeDestination(ctx: ActivityContext): ActivityDestination {
   return {
     kind: 'workstation',
@@ -418,8 +547,14 @@ function build(
   const family = roleFamily(ctx.agent.role);
   const clock = previous?.clock ?? 0;
   const meeting = ctx.meeting;
+  const onBreak = ctx.break && !ctx.task && ctx.agent.status === 'IDLE' ? ctx.break : null;
   const destination =
-    destinationOverride ?? (meeting ? meetingDestination(ctx, meeting) : homeDestination(ctx));
+    destinationOverride ??
+    (meeting
+      ? meetingDestination(ctx, meeting)
+      : onBreak
+        ? breakDestination(ctx, onBreak)
+        : homeDestination(ctx));
   return {
     agentId: ctx.agent.id,
     role: ctx.agent.role,
@@ -428,9 +563,9 @@ function build(
     taskId: ctx.task?.id ?? null,
     taskTitle: ctx.task?.title ?? null,
     activity: kind,
-    animation: animationFor(kind),
+    animation: animationForDestination(destination, kind),
     destination,
-    label: labelFor(kind, ctx),
+    label: destination.kind === 'break' ? 'On a short break' : labelFor(kind, ctx),
     reason,
     since: 0,
     clock,
@@ -511,7 +646,9 @@ export function createActivity(ctx: ActivityContext): AgentActivity {
   }
   const seated = ctx.task ? deskActivityFor(roleFamily(ctx.agent.role), hashString(ctx.agent.id) % 97, 0) : 'IDLE';
   const reason = ctx.task ? `Task “${ctx.task.title}” is in progress.` : 'No assigned work; the agent stays at its workstation.';
-  return build(ctx, null, seated, reason);
+  // A machine always starts at the desk: meetings and breaks are walked to,
+  // never teleported into.
+  return build(ctx, null, seated, reason, homeDestination(ctx));
 }
 
 /**
@@ -613,6 +750,46 @@ export function stepActivity(
       return advance('SITTING_DOWN', reason);
     }
     return advance('STANDING_UP', reason);
+  }
+
+  // 6. Idle colleagues take a short break away from the desk, then come back.
+  const breakSlot = ctx.break && !ctx.task && ctx.agent.status === 'IDLE' ? ctx.break : null;
+  const breakDestinationNow = breakSlot ? breakDestination(ctx, breakSlot) : null;
+
+  if (breakDestinationNow) {
+    if (current.destination.kind === 'break') {
+      if (current.activity === 'STANDING_UP') {
+        if (since < TRANSITION_SECONDS.STANDING_UP) return current;
+        return advance('WALKING', 'Walking to the break area.', breakDestinationNow);
+      }
+      if (current.activity === 'WALKING') {
+        if (!ctx.atDestination) return { ...current, destination: breakDestinationNow };
+        return advance('IDLE', 'On a short break, away from the desk.', breakDestinationNow);
+      }
+      return {
+        ...current,
+        destination: breakDestinationNow,
+        animation: BREAK_ANIMATION,
+        label: 'On a short break',
+      };
+    }
+    if (current.activity === 'STANDING_UP') {
+      if (since < TRANSITION_SECONDS.STANDING_UP) return current;
+      return advance('WALKING', 'Walking to the break area.', breakDestinationNow);
+    }
+    return advance('STANDING_UP', 'Taking a short break.', breakDestinationNow);
+  }
+
+  if (current.destination.kind === 'break') {
+    if (current.activity === 'STANDING_UP') {
+      if (since < TRANSITION_SECONDS.STANDING_UP) return { ...current, destination: home };
+      return advance('WALKING', 'Break over; heading back to the desk.', home);
+    }
+    if (current.activity === 'WALKING') {
+      if (!ctx.atDestination) return { ...current, destination: home };
+      return advance('SITTING_DOWN', 'Back at the desk after a break.', home);
+    }
+    return advance('STANDING_UP', 'Break over; standing up.', home);
   }
 
   switch (current.activity) {

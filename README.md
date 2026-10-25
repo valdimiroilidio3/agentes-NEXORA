@@ -120,9 +120,25 @@ still runs and the floor/room navigation, task board and inspector remain fully 
 - Meetings are real: management roles convene on their own floor, seats are allocated deterministically from the chairs
   actually placed around the meeting table (no two colleagues on one chair, everyone oriented toward the table), and the
   agent walks there, sits, stays for the meeting and walks back.
+- **Idle colleagues get up.** Every ~5 minutes, staggered per agent, an idle colleague stands, walks to the lounge (or
+  the corridor by the lift on floors without one), stands there for half a minute and walks back to the chair. A task
+  that arrives mid-break wins immediately.
 - One scheduler (`src/scene/character/activitySystem.ts`) advances all 27 machines per frame (~0.06 ms per frame in the
   test harness), then the single rig callback poses the bodies: no per-agent render loop, no React re-render during
   animation.
+
+### Live desk screens
+
+- Every workstation monitor is a **live display**, not a dark plane. It shows, in the 3D scene: the occupant's name and
+  role, operational status, the current activity and its reason, the task title and status, the room and a running wall
+  clock. Reading a screen is the same as looking over a colleague's shoulder.
+- Content is composed by one pure function (`screenContentFor`) and painted onto a per-monitor canvas texture by a
+  registry that repaints only when the wording changes (throttled to 0.4 s per screen). No React re-render is involved
+  and each monitor costs one extra plane and one texture in the full-detail tier; the compact cutaway tier skips screens.
+- Screens are honest: an offline colleague's monitor says the agent is offline, a blocked one says it is waiting, and a
+  failed one shows the failure reason instead of inventing progress.
+- Desks are dressed as workplaces: keyboard, mouse, mug and papers are modelled on every desk, so a workstation reads as
+  occupied furniture rather than a bare slab.
 
 ### Tasks and execution
 
@@ -232,7 +248,7 @@ Copy `.env.example` to `.env.local` to configure the bridge. Without it, live mo
 | --- | --- |
 | `tsc --noEmit` | Passes |
 | `next build` | Passes (static `/` + dynamic `/api/executions`) |
-| `npm test` | 188 passed / 188 across 12 files |
+| `npm test` | 198 passed / 198 across 14 files |
 | `npm run validate` | 5 floors, 38 rooms, 65 workstations, no warnings |
 | `GET /api/executions` | `200` `{mode:"unavailable"}` |
 | `POST /api/executions` (unconfigured) | `501 INTEGRATION_UNAVAILABLE` |
@@ -243,6 +259,8 @@ Copy `.env.example` to `.env.local` to configure the bridge. Without it, live mo
 | Crossing without collision | Two colleagues walking opposite ways through the corridor keep ≥ 0.55 m separation and both arrive |
 | Activity FSM | 13 animation states, role-coherent sets, task start/finish/change transitions, meeting seat allocation and return, deterministic and staggered |
 | Scheduler cost | 27 agents × 1 800 frames in 101 ms (≈ 0.06 ms/frame) in the test harness |
+| Desk screens | one live screen per colleague, painted with the activity wording; screens unmount and release their textures with the agent |
+| Office life | idle colleagues leave for a staggered break, stand on their own spot, and return; a running task cancels the break |
 | Navigation grids | 20 ms to build all five floors; ≈ 9 500 walkable cells of 16 200 per floor; 2.1 ms per route |
 | Characters (headless) | 27 rigs registered and released, a WAITING agent walks 0.45–1.1 m from its chair, a WORKING agent stays seated (tests) |
 | Feet/hands alignment (FK) | Lower sole ≤ 1 mm from the floor in every state/seed/frame; seated wrists at 0.68–0.90 m (desk top 0.74 m) |

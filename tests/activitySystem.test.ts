@@ -22,6 +22,7 @@ import {
   reportArrival,
   resetActivities,
   setActivityBuilding,
+  setBreakSource,
   setMeetingSource,
   stepActivities,
   syncActivities,
@@ -75,6 +76,8 @@ function advance(seconds: number): void {
 
 beforeEach(() => {
   resetActivities();
+  setMeetingSource(null);
+  setBreakSource(() => new Map());
   setActivityBuilding(building);
 });
 

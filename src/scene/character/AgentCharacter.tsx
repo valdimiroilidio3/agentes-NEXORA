@@ -302,15 +302,17 @@ export function AgentCharacter({
             reportArrival(current.agentId);
           }
         } else {
-          // Standing beside the desk needs a short side-step, not a route.
+          // Standing beside the desk needs a short side-step, not a route. A
+          // colleague on a break or in a meeting stands where they were sent.
           const standing = animation.posture === 'STANDING';
+          const stepAside = standing && destination.kind === 'workstation';
           const side = behaviour.side;
           const away = awayPoint(destination.point, destination.facing, side);
           const pathLength = Math.hypot(
             away.x - destination.point.x,
             away.z - destination.point.z,
           );
-          const motion = stepMotion(motionRef.current, standing ? pathLength : 0, dt);
+          const motion = stepMotion(motionRef.current, stepAside ? pathLength : 0, dt);
           motionRef.current = motion;
           const progress = pathLength > 1e-4 ? clamp01(motion.progress / pathLength) : 0;
           x = destination.point.x + (away.x - destination.point.x) * progress;
@@ -319,7 +321,7 @@ export function AgentCharacter({
           walkPhase = motion.phase;
           walkAmount = motion.moving ? motion.walking : 0;
           const desiredFacing =
-            standing && progress > 0.02
+            stepAside && progress > 0.02
               ? awayFacing(destination.facing, side)
               : destination.facing;
           facingRef.current = dampAngle(facingRef.current, desiredFacing, dt, 6);

@@ -11,6 +11,7 @@ import { useFrame } from '@react-three/fiber';
 import { useEffect, useRef } from 'react';
 import type { Vec2 } from '@/domain/types';
 import { resetActivities, stepActivities } from './activitySystem';
+import { refreshDeskScreens, resetDeskScreens } from './deskScreens';
 
 export interface RigHandle {
   readonly id: string;
@@ -81,11 +82,14 @@ export function CharacterAnimator() {
     // that read them, so every character sees a consistent frame.
     stepActivities(dt);
     updateRigs(state.clock.elapsedTime, dt);
+    // Monitor content follows the same clock, throttled inside the registry.
+    refreshDeskScreens(dt);
   });
   useEffect(
     () => () => {
       resetRigs();
       resetActivities();
+      resetDeskScreens();
     },
     [],
   );

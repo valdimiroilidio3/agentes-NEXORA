@@ -13,8 +13,10 @@ import { buildFacadeFins, buildFloorFacade, buildSite } from '@/scene/facade';
 import { visibleFloors, sceneLayers } from '@/scene/visibility';
 import { SceneWorld } from '@/scene/OfficeScene';
 import { CharacterAnimator, resetRigs, rigCount } from '@/scene/character/characterSystem';
+import { setBreakSource, setMeetingSource } from '@/scene/character/activitySystem';
 import { AgentLayer } from '@/scene/character/officeAgents';
 import { agentActivity as agentActivityFor } from '@/scene/character/activitySystem';
+import { deskScreenCount, deskScreenPaintCount } from '@/scene/character/deskScreens';
 import type { OperationsState } from '@/domain/operations';
 import type { Building, ViewMode } from '@/domain/types';
 
@@ -35,7 +37,13 @@ function countInstances(specs: Parameters<typeof drawCallCount>[0]) {
   };
 }
 
-/** jsdom has no canvas implementation; label textures are not part of this test. */
+/** Text drawn on any stubbed 2D context (labels, desk screens). */
+const paintedText: string[] = [];
+export function recordedText(): string[] {
+  return paintedText;
+}
+
+/** jsdom has no canvas implementation; label and screen textures are temporary. */
 function stubCanvas() {
   const context = {
     clearRect: vi.fn(),
@@ -44,7 +52,11 @@ function stubCanvas() {
     roundRect: vi.fn(),
     fill: vi.fn(),
     stroke: vi.fn(),
-    fillText: vi.fn(),
+    measureText: (text: string) => ({ width: String(text).length * 5.5 }),
+    createLinearGradient: () => ({ addColorStop: vi.fn() }),
+    fillText: (text: unknown) => {
+      paintedText.push(String(text));
+    },
     set fillStyle(_value: string) {},
     set strokeStyle(_value: string) {},
     set lineWidth(_value: number) {},
@@ -306,6 +318,9 @@ describe('visibility rules', () => {
 
 describe('character rendering', () => {
   beforeAll(() => {
+    // Relocation tests assert an exact destination: no meetings or breaks.
+    setMeetingSource(() => new Map());
+    setBreakSource(() => new Map());
     (HTMLCanvasElement.prototype as unknown as { getContext: unknown }).getContext = function getContext() {
       return stubCanvas().getContext();
     };
@@ -614,6 +629,32 @@ describe('character rendering', () => {
     expect(Math.hypot(end.x - target!.seat.x, end.z - target!.seat.z)).toBeLessThan(0.25);
     expect(end.y).toBeGreaterThan(4);
     await renderer.unmount();
+  });
+
+  it('shows what each colleague is doing on their own monitor', async () => {
+    resetRigs();
+    paintedText.length = 0;
+    const renderer = await ReactThreeTestRenderer.create(layer('full'));
+    await renderer.advanceFrames(20, 0.05);
+
+    const screenNodes = renderer.scene.findAll(
+      (candidate) =>
+        typeof candidate.instance?.name === 'string' && candidate.instance.name.startsWith('screen-'),
+    );
+    expect(screenNodes.length).toBe(occupants.length);
+    expect(deskScreenCount()).toBe(occupants.length);
+
+    // The canvas has been painted with real activity wording, not a placeholder.
+    const working = occupants.find((agent) => agent.status === 'WORKING') ?? occupants[0]!;
+    const activity = agentActivityFor(working.id);
+    const text = paintedText.join(' | ');
+    expect(text).toContain(working.name);
+    if (activity) expect(text).toContain(activity.label);
+    expect(paintedText.length).toBeGreaterThan(occupants.length * 3);
+    expect(deskScreenPaintCount()).toBeGreaterThan(0);
+
+    await renderer.unmount();
+    expect(deskScreenCount()).toBe(0);
   });
 
   it('keeps agent state when the visible floor changes', async () => {
