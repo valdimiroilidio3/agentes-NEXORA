@@ -266,7 +266,7 @@ lifts, and an autonomous activity machine per colleague. Architecture/furniture/
 | Check | Result |
 | --- | --- |
 | `npx tsc --noEmit` | clean |
-| `npx vitest run` | 186 passed / 186 across 12 files (~7.8 s) |
+| `npx vitest run` | 188 passed / 188 across 12 files (~7.8 s) |
 | Navigation grids | 20.2 ms for five floors; 16 200 cells per floor, ≈ 9 500 walkable |
 | Routing throughput | 2.08 ms per seat-to-seat route; 65/65 anchors routable from the lift, 0 adjusted |
 | Connectivity | every walkable cell on every floor reachable from the lift (test) |
@@ -293,6 +293,21 @@ lifts, and an autonomous activity machine per colleague. Architecture/furniture/
 4. **Teleporting on a failed route.** The first implementation placed the agent at the destination when A\* failed. It now
    keeps the body where it is, logs the reason once, and only accepts a route that ends at a reachable point (flagged
    `adjusted`).
+
+### Mandatory scenarios (1–10) and where they are proven
+
+| # | Scenario | Test |
+| --- | --- | --- |
+| 1 | Start a task → the colleague works at the desk | `activity > sits down before working when a new task arrives`; `activitySystem > reacts to a task starting and finishing` |
+| 2 | Stand up, walk the corridor, sit at another desk | `scene > walks to the new desk when relocated`; `navigation > cross-room route uses doors and the corridor` |
+| 3 | Two colleagues cross without colliding | `navigation > lets two colleagues pass each other in the corridor` (≥ 0.55 m) |
+| 4 | Enter a meeting room and take a free seat | `activity > walks a convener to the meeting chair, sits, then returns`; `activity > allocates a different chair to every attendee` |
+| 5 | Task completion drives the right transition | `activity > stands up, walks, returns and sits when the task finishes` |
+| 6 | Task cancelled or changed mid-task / mid-walk | `activity > records a task change mid-task`; `activitySystem > stops a walk and returns home when the task is cancelled mid-route` |
+| 7 | Blocked destination → alternative route or honest failure | `navigation > reports an impossible destination honestly`; `routes a chair under a desk to the closest walkable cell`; route-end adjustment is implemented for walled-off goals |
+| 8 | Many agents without excessive degradation | `activitySystem > steps all twenty-seven colleagues well inside a frame budget` (0.06 ms/frame) |
+| 9 | Floor or camera change preserves agent state | `activitySystem > keeps an agent's history when only the camera or floors change`; `scene > keeps agent state when the visible floor changes` |
+| 10 | Re-entry with no duplication | `activitySystem > creates one machine per agent and never duplicates it`; `scene > registers one animation rig per visible colleague and releases it` |
 
 ### Honest limitations of this stage
 

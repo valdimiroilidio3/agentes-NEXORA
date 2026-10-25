@@ -203,6 +203,42 @@ describe('movement handover', () => {
   });
 });
 
+describe('interruptions', () => {
+  it('stops a walk and returns home when the task is cancelled mid-route', () => {
+    const base = contextsFor(['agent-nova'])[0]!;
+    const task = { ...tasks[3]!, id: 'task-live-nova', title: 'Profile the render pipeline', agentId: 'agent-nova' };
+    const working: ActivityContext = {
+      ...base,
+      agent: { ...base.agent, status: 'WORKING', currentTaskId: task.id },
+      task,
+    };
+    syncActivities([working]);
+    advance(1);
+    // Force a walk by moving the desk: the machine retargets and the body walks.
+    const far = contextsFor(['agent-helios'])[0]!;
+    syncActivities([{ ...working, homeFloorId: far.homeFloorId, homeRoomId: far.homeRoomId, homeSeat: far.homeSeat }]);
+    advance(0.2);
+    expect(agentActivity('agent-nova')!.destination.roomId).toBe(far.homeRoomId);
+
+    // Task cancelled while the colleague is on its way.
+    syncActivities([
+      {
+        ...working,
+        homeFloorId: far.homeFloorId,
+        homeRoomId: far.homeRoomId,
+        homeSeat: far.homeSeat,
+        task: null,
+        agent: { ...base.agent, status: 'IDLE', currentTaskId: null },
+      },
+    ]);
+    advance(0.2);
+    const cancelled = agentActivity('agent-nova')!;
+    expect(cancelled.taskId).toBeNull();
+    expect(cancelled.history.some((event) => event.reason.includes('finished'))).toBe(true);
+    expect(cancelled.destination.kind).toBe('workstation');
+  });
+});
+
 describe('scale', () => {
   it('steps all twenty-seven colleagues well inside a frame budget', () => {
     syncActivities(contextsFor([]));

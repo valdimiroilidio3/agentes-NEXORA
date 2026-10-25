@@ -14,6 +14,7 @@ import { visibleFloors, sceneLayers } from '@/scene/visibility';
 import { SceneWorld } from '@/scene/OfficeScene';
 import { CharacterAnimator, resetRigs, rigCount } from '@/scene/character/characterSystem';
 import { AgentLayer } from '@/scene/character/officeAgents';
+import { agentActivity as agentActivityFor } from '@/scene/character/activitySystem';
 import type { OperationsState } from '@/domain/operations';
 import type { Building, ViewMode } from '@/domain/types';
 
@@ -612,6 +613,41 @@ describe('character rendering', () => {
     const end = node()!.instance.position.clone();
     expect(Math.hypot(end.x - target!.seat.x, end.z - target!.seat.z)).toBeLessThan(0.25);
     expect(end.y).toBeGreaterThan(4);
+    await renderer.unmount();
+  });
+
+  it('keeps agent state when the visible floor changes', async () => {
+    resetRigs();
+    const view = (floorIds: ReadonlySet<string>) => (
+      <group>
+        <CharacterAnimator />
+        <AgentLayer
+          building={building}
+          ops={ops}
+          visibleFloorIds={floorIds}
+          detail="compact"
+          selectedAgentId={null}
+          onSelectAgent={() => {}}
+        />
+      </group>
+    );
+    const floorOne = new Set([building.floors[1]!.id]);
+    const renderer = await ReactThreeTestRenderer.create(view(floorOne));
+    await renderer.advanceFrames(40, 0.05);
+    const agentsOnFloorOne = ops.agents.filter((agent) => agent.roomId.startsWith('f1-')).length;
+    expect(rigCount()).toBeGreaterThan(0);
+
+    // Hide floor 1 and show another storey: its rigs unmount, nothing else resets.
+    await renderer.update(view(new Set([building.floors[3]!.id])));
+    await renderer.advanceFrames(40, 0.05);
+    expect(rigCount()).toBeGreaterThan(0);
+    expect(rigCount()).not.toBe(agentsOnFloorOne);
+
+    await renderer.update(view(floorOne));
+    await renderer.advanceFrames(20, 0.05);
+    const activity = agentActivityFor('agent-nova');
+    expect(activity, 'the activity machine survived the floor change').not.toBeNull();
+    expect(activity!.clock).toBeGreaterThan(3);
     await renderer.unmount();
   });
 

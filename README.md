@@ -232,7 +232,7 @@ Copy `.env.example` to `.env.local` to configure the bridge. Without it, live mo
 | --- | --- |
 | `tsc --noEmit` | Passes |
 | `next build` | Passes (static `/` + dynamic `/api/executions`) |
-| `npm test` | 186 passed / 186 across 12 files |
+| `npm test` | 188 passed / 188 across 12 files |
 | `npm run validate` | 5 floors, 38 rooms, 65 workstations, no warnings |
 | `GET /api/executions` | `200` `{mode:"unavailable"}` |
 | `POST /api/executions` (unconfigured) | `501 INTEGRATION_UNAVAILABLE` |
