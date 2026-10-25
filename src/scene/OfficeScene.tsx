@@ -12,6 +12,7 @@ import { buildFacadeFins, buildRoof, buildSite, entranceXFor } from './facade';
 import { SceneBoxes } from './SceneBoxes';
 import { FloorLights, FloorLiveLayer, FloorShell } from './FloorScene';
 import { CharacterAnimator } from './character/characterSystem';
+import { AgentLayer } from './character/officeAgents';
 import { computeCameraPose, cameraLimits, type CameraPose } from './camera';
 import { sceneLayers, visibleFloors } from './visibility';
 import { FacadeSign } from './Labels';
@@ -239,6 +240,10 @@ export function SceneWorld({
   // Full character detail inside a floor/room; a lighter rig for the cutaway
   // overview where 27 people share the frame.
   const characterDetail = viewMode === 'floor' || viewMode === 'room' ? 'full' : 'compact';
+  const visibleIds = useMemo(
+    () => new Set(floorsToRender.map((floor) => floor.id)),
+    [floorsToRender],
+  );
   const entranceX = entranceXFor(building);
 
   return (
@@ -274,7 +279,6 @@ export function SceneWorld({
             selectedAgentId={selectedAgentId}
             hoveredRoomId={hoveredRoomId}
             showInterior={showInterior}
-            characterDetail={characterDetail}
             onSelectRoom={onSelectRoom}
             onHoverRoom={onHoverRoom}
             onSelectAgent={onSelectAgent}
@@ -282,6 +286,17 @@ export function SceneWorld({
           {showInterior && <FloorLights building={building} floor={floor} />}
         </group>
       ))}
+
+      {showInterior && (
+        <AgentLayer
+          building={building}
+          ops={ops}
+          visibleFloorIds={visibleIds}
+          detail={characterDetail}
+          selectedAgentId={selectedAgentId}
+          onSelectAgent={onSelectAgent}
+        />
+      )}
     </>
   );
 }

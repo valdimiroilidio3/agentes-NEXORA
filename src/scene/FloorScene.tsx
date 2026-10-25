@@ -13,10 +13,6 @@ import {
 import { buildEndFacade, buildFloorFacade } from './facade';
 import { SceneBoxes } from './SceneBoxes';
 import { FurnitureItem } from './Furniture';
-import { AgentCharacter, OfficeChair } from './character/AgentCharacter';
-import { appearanceFor } from './character/appearance';
-import { behaviourFor } from './character/behaviour';
-import type { DetailLevel } from './character/parts';
 import { LabelSprite } from './Labels';
 import { summariseRoom } from '@/domain/selectors';
 import type { OperationsState } from '@/domain/operations';
@@ -100,8 +96,6 @@ export interface FloorLiveLayerProps {
   readonly hoveredRoomId: string | null;
   /** False in exterior/overview: interiors are hidden behind the façade. */
   readonly showInterior?: boolean;
-  /** Character detail tier: full inside a floor or room, compact in cutaway. */
-  readonly characterDetail?: DetailLevel;
   readonly onSelectRoom: (roomId: string | null) => void;
   readonly onHoverRoom: (roomId: string | null) => void;
   readonly onSelectAgent: (agentId: string | null) => void;
@@ -117,7 +111,6 @@ export function FloorLiveLayer({
   selectedAgentId,
   hoveredRoomId,
   showInterior = true,
-  characterDetail = 'compact',
   onSelectRoom,
   onHoverRoom,
   onSelectAgent,
@@ -196,88 +189,6 @@ export function FloorLiveLayer({
 
             {selected && viewMode === 'room' && (
               <SceneBoxes specs={buildRoomCeiling(room, floor)} />
-            )}
-          </group>
-        );
-      })}
-      {showInterior && (
-        <FloorAgents
-          floor={floor}
-          ops={ops}
-          detail={characterDetail}
-          selectedAgentId={selectedAgentId}
-          onSelectAgent={onSelectAgent}
-        />
-      )}
-    </group>
-  );
-}
-
-/**
- * All occupants of one floor, drawn once per agent rather than per room so a
- * character can stand beside its desk without being re-parented.
- */
-export function FloorAgents({
-  floor,
-  ops,
-  detail,
-  selectedAgentId,
-  onSelectAgent,
-}: {
-  floor: Floor;
-  ops: OperationsState;
-  detail: DetailLevel;
-  selectedAgentId: string | null;
-  onSelectAgent: (agentId: string) => void;
-}) {
-  const tasksById = useMemo(
-    () => new Map(ops.tasks.map((task) => [task.id, task])),
-    [ops.tasks],
-  );
-  const roomById = useMemo(() => new Map(floor.rooms.map((room) => [room.id, room])), [floor.rooms]);
-  const occupants = useMemo(
-    () => ops.agents.filter((agent) => roomById.has(agent.roomId)),
-    [ops.agents, roomById],
-  );
-
-  return (
-    <group>
-      {occupants.map((agent) => {
-        const room = roomById.get(agent.roomId);
-        const workstation = room?.workstations.find((ws) => ws.id === agent.workstationId);
-        if (!room || !workstation) return null;
-        const appearance = appearanceFor(agent.id);
-        const facing = workstation.rotationY + Math.PI;
-        const task = agent.currentTaskId ? tasksById.get(agent.currentTaskId) ?? null : null;
-        const behaviour = behaviourFor(agent, task);
-        return (
-          <group key={agent.id}>
-            <OfficeChair
-              appearance={appearance}
-              x={workstation.seat.x}
-              z={workstation.seat.z}
-              rotationY={facing}
-              detail={detail}
-            />
-            {behaviour.visible && (
-              <AgentCharacter
-                agent={agent}
-                seat={workstation.seat}
-                facing={facing}
-                detail={detail}
-                selected={agent.id === selectedAgentId}
-                onSelect={onSelectAgent}
-                behaviour={behaviour}
-              />
-            )}
-            {agent.id === selectedAgentId && (
-              <LabelSprite
-                text={agent.name}
-                sub={`${agent.role} · ${agent.status.toLowerCase()}`}
-                position={[workstation.seat.x, 2.05, workstation.seat.z]}
-                accent="#54d6e6"
-                scale={0.85}
-              />
             )}
           </group>
         );

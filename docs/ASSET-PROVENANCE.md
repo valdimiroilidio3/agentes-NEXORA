@@ -26,6 +26,10 @@ There is no external asset host in `next.config.ts`.
   mocap data, Mixamo clip or purchased animation library is used.
 - Faces, hairstyles, clothing and size variation are seeded from the agent id, so every look in the scene is generated
   by this repository's own code.
+- Navigation and behaviour are equally original: the occupancy grid, A\* search, corridor lanes, lift journeys,
+  avoidance rules, activity finite state machine and meeting-seat allocation were written for this project
+  (`src/scene/character/navigation.ts`, `journey.ts`, `activity.ts`, `activitySystem.ts`). No third-party pathfinding
+  library, behaviour tree, animation state machine or scheduling package is installed.
 
 ## Reference project boundary
 

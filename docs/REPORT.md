@@ -239,7 +239,77 @@ chair without being re-parented; `SceneWorld` mounts `CharacterAnimator` and sel
 
 ### Next improvement stage (stage 2)
 
-Per the second brief, the next stage audits and refines the architecture, furniture, materials, lighting and camera
-presentation: furniture construction detail (frames, joints, handles, soft edges), workstation equipment layout,
-floor/ceiling trims, interior planting and signage, PBR material tuning, light balance and camera framing. Stage 3 then
-wires the navigation graph so agents can walk the corridor, cross through doors and use the stairs.
+Stage 2 (section 11) gives the workforce somewhere to go: a real navigation grid, journeys through doors, corridors and
+lifts, and an autonomous activity machine per colleague. Architecture/furniture/lighting refinement becomes stage 3.
+
+## 11. Improvement stage 2 — movement and autonomous activities (this iteration)
+
+### What the brief asked for, and what this stage delivered
+
+| Requirement | Delivered |
+| --- | --- |
+| Agents walk instead of being placed | `navigation.ts` (grid, A\*, lanes) + `journey.ts` (legs, lift, walker) |
+| Routes respect walls, doors and furniture | grid carved from real geometry, furniture footprints blocked, doors opened, corner cutting refused |
+| No clipping, floating, standing on desks or ending inside chairs | routes end at the seat anchor; the rig is grounded every frame; blocked destinations are reported, not faked |
+| Gradual turning, correct stop positions | facing damped at 6–8 s⁻¹; the walker stops exactly on the last waypoint |
+| Agent-to-agent avoidance | `avoidanceFor`: slow down within 1.2 m, deterministic id priority, sidestep up to 0.85 m; corridors use planned right-hand lanes |
+| Interaction points (chair, desk, monitor, meeting seats) | workstation seat anchors; meeting seats derived from the chairs actually placed around the meeting table, facing the table centre |
+| Full animation vocabulary, blended | 13 states, new `TALKING`, `MEETING` and `PICKING_UP` poses, joint-level damping so nothing snaps |
+| Role-coherent activities tied to operational state | role families with their own activity sets; status and task drive every transition; nothing is invented about results |
+| Per-agent FSM with history and task link | `activity.ts`: status, activity, destination, zone, since, clock, history, task id/title, label and reason |
+| Reactive without reloading the scene | `AgentLayer` republishes context on operational change; machines pick it up on the next frame |
+| One shared scheduler, no per-agent loop | `activitySystem.stepActivities` then one rig callback in `CharacterAnimator` |
+| Floor/camera changes preserve agent state | activities live outside the floor groups; the rig component is keyed by agent id |
+
+### Measured results (this stage)
+
+| Check | Result |
+| --- | --- |
+| `npx tsc --noEmit` | clean |
+| `npx vitest run` | 186 passed / 186 across 12 files (~7.8 s) |
+| Navigation grids | 20.2 ms for five floors; 16 200 cells per floor, ≈ 9 500 walkable |
+| Routing throughput | 2.08 ms per seat-to-seat route; 65/65 anchors routable from the lift, 0 adjusted |
+| Connectivity | every walkable cell on every floor reachable from the lift (test) |
+| Cross-room route | editorial → copy on floor 1: out of the door, 0.55 m lane, back in through the other door, 23.6 m |
+| Walk timing | simulated arrival within 0.9–1.25× of `length / 1.05 m/s` |
+| Lift journey | floor 1 → floor 3: 2 legs, hidden while riding, 8.4 m elevation change, arrives exactly |
+| Crossing | two colleagues walking opposite ways keep ≥ 0.55 m separation (was 0.006 m before the lane fix) |
+| Desk-to-desk relocation (headless R3F) | ≤ 0.12 m per frame (no teleport), true path length covered, stops ≤ 0.4 m from the target chair |
+| Cross-room relocation (headless R3F) | colleague is still on the floor mid-route and lands within 0.2 m of the new chair |
+| Floor-to-floor relocation (headless R3F) | walks to the core, waits, rides the lift, arrives on the new desk within 0.25 m and at the upper elevation |
+| Activity FSM | 18 tests: vocabulary, role coherence, task start/finish/change, meetings and seats, determinism, interludes |
+| Scheduler | 8 tests: sync/dedup/removal, arrival handover, retargeting, state preserved across camera changes, 27 agents × 1 800 frames in 101 ms |
+
+### Problems found and fixed in this stage (documented because they were real)
+
+1. **Symmetric avoidance produced collisions.** Two agents each stepping aside from the other oscillated: the lateral sign
+   flipped frame to frame and the pair passed within 6 mm. Fixed by (a) planning opposing traffic into separate corridor
+   lanes, (b) deterministic id priority so only one of the pair yields, (c) reacting only to people on the current line
+   of travel, with a dead zone behind.
+2. **Sitting down too early.** The FSM used to advance from `WALKING` on a timer, so a colleague could "arrive" before
+   the body did. Movement now reports arrival; `WALKING` cannot end until the rig is on the destination.
+3. **Stale destinations.** A relocation changed the agent's home seat but the activity kept its old destination until the
+   next scheduled block. `stepActivity` now retargets immediately when the destination identity changes.
+4. **Teleporting on a failed route.** The first implementation placed the agent at the destination when A\* failed. It now
+   keeps the body where it is, logs the reason once, and only accepts a route that ends at a reachable point (flagged
+   `adjusted`).
+
+### Honest limitations of this stage
+
+- **Still no browser review.** No GPU is available here. Every claim above comes from unit tests, headless R3F scene
+  tests and measured timings — not from watching the scene. Visual smoothness, pose readability at distance and the look
+  of a meeting in progress are unverified.
+- **Meetings are a deterministic simulation**, not a calendar integration. They are local to the convener's floor, last
+  96 s every 7 min, and exist to exercise circulation; they are not evidence of real meetings. No fabricated outcomes:
+  nothing is recorded as a result.
+- **The route graph has no stairs.** Vertical movement uses the lift (the building has one core). The stair geometry is
+  modelled but not walkable.
+- **Avoidance is local and pairwise.** It prevents head-on and follow collisions in corridors and open space, but there
+  is no global reservation system; a dense crowd around one door could still converge (the sidestep simply decays).
+- **The walk cycle is procedural**, not motion-captured, and the rig is unsheeted rigid parts: at a 20 m distance it
+  reads as a person, close up it is stylised.
+- **Cost per person is unchanged** (60 meshes full, 21 compact). Only the cutaway tier is instanced down; a larger
+  workforce would need merging of clothing parts.
+- **Off-screen rigs are not culled**: hidden floors unmount their characters (so their machines keep running but no
+  meshes exist), yet a visible floor still animates every occupant. Reducing the update rate for agents outside the
+  camera frustum is the next optimisation, not something claimed here.

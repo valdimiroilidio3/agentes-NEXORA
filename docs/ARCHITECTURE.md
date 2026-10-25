@@ -246,3 +246,83 @@ roughly 25 GPU materials.
 Full detail is used inside a floor or room view; the cutaway overview — where all 27 people share the frame — uses the
 compact rig. The next optimisation target is merging each room's furniture by material, which dominates the cutaway
 budget.
+
+## 11. Agent movement and autonomous activities
+
+Movement and behaviour live in four pure modules plus one thin renderer, so the whole model is testable without a
+canvas:
+
+| Module | Responsibility |
+| --- | --- |
+| `scene/character/navigation.ts` | 0.2 m occupancy grid per floor (walls, door gaps, furniture, 0.26 m body radius), A\* routing, line-of-sight smoothing, corridor lanes, lift anchor, reachability queries |
+| `scene/character/journey.ts` | One-floor or two-leg (lift) journeys, the walker integrator, lift phases, local avoidance |
+| `scene/character/activity.ts` | Per-agent finite state machine: role family, activity vocabulary, task/status transitions, meeting seats and allocation |
+| `scene/character/activitySystem.ts` | The single scheduler: publishes operational context, steps every machine, reports arrivals |
+| `scene/character/AgentCharacter.tsx` | The rig: walks to the activity destination, blends poses, reports arrival |
+
+### Navigation
+
+The grid is carved per floor from `building` geometry: room interiors inside the interior-wall inset, a gap of
+`door.width` at each door, the corridor band, and nothing within `AGENT_RADIUS + WALL_CLEARANCE` of a furniture
+footprint (`desk`, `meeting-table`, `server-rack`, … are solid; `chair`, `rug`, `stool`, `plant` are not). Grids are
+cached per floor id and cleared by `clearNavCache()`.
+
+`planRoute` snaps both endpoints to the nearest walkable cell (8-cell search ring), then:
+
+1. A\* with an octile heuristic over the 8 neighbourhood, refusing diagonal moves that squeeze past a corner.
+2. If either endpoint is inside a room and they are different rooms, the trip is stitched from three sub-routes:
+   room → corridor lane, lane → lane, lane → room. The lane is `±0.55 m` from the corridor centre line, chosen by
+   travel direction (right-hand traffic), so opposing walks do not share a line.
+3. A line-of-sight pass removes redundant waypoints, which keeps turns smooth.
+4. If the exact destination is unreachable but the space around it is walkable, the route ends at the closest reachable
+   cell and is flagged `adjusted` with a note; genuinely off-grid destinations fail with `UNREACHABLE` / `OUT_OF_BOUNDS`.
+
+Measured on the shipped building: 20 ms to build all five grids, ≈ 9 500 walkable cells out of 16 200 per floor,
+2.1 ms per routed trip, 65/65 workstation anchors routable from the lift with no adjustment needed, and no walkable
+cell on any floor disconnected from the lift (a test asserts this).
+
+### Journeys and walking
+
+`planJourney` returns one leg for a same-floor trip and two legs plus a lift ride otherwise
+(`WALKING → WAITING_LIFT → RIDING_LIFT → WALKING → ARRIVED`). The walker is hidden while the doors are closed and its
+elevation follows the floor it is on, so a trip from floor 1 to floor 3 crosses 8.4 m of height with no visual glitch.
+Speed is 1.05 m/s; `advanceWalker` consumes the real frame delta and never overshoots a waypoint. Facing is damped
+(`1 − e^(−8·dt)`), so turns are gradual.
+
+`avoidanceFor(id, position, heading, others)` returns a speed scale and a lateral offset. A colleague with somebody on
+their line of travel within 1.2 m slows to as little as 0.05× and steps up to 0.85 m off the planned line; the
+higher id yields, so the pair resolves deterministically and both keep moving. Lateral offsets the size of a corridor
+lane are safe by construction because the other walker is in the opposite lane.
+
+### Activities
+
+`ActivityKind` is the complete vocabulary (`IDLE`, `WALKING`, `TURNING`, `SITTING_DOWN`, `SITTING`, `STANDING_UP`,
+`TYPING`, `READING`, `THINKING`, `TALKING`, `MEETING`, `PICKING_UP`, `RETURNING_TO_WORK`) and each kind maps to a pose
+library animation with a posture (`SEATED`, `STANDING`, `TRANSIT`). New pose states added for this stage: `TALKING`,
+`MEETING` (seated) and `PICKING_UP` (standing).
+
+Precedence inside `stepActivity` is deliberate:
+
+1. **operational facts** — offline, blocked (`WAITING`), failed (`ERROR`) — win over everything;
+2. **meetings** — a scheduled convener stands up, walks to its allocated chair, sits for the meeting and walks back;
+3. **destination retargeting** — a relocation changes the destination without disturbing the activity;
+4. **task churn** — assigned, finished, replaced or cancelled, each with its own stand → walk → sit sequence;
+5. **desk rhythm** — a seeded 22–30 s block picks a role-coherent activity, with a `PICKING_UP` interlude every fourth
+   block.
+
+Role families (`engineering`, `design`, `analysis`, `commercial`, `management`, `support`) are derived from the role
+title and each owns its activity set, so a finance analyst never "types like a designer" by accident.
+
+### Scheduling and rendering
+
+`AgentLayer` publishes a context per agent (agent, task, workstation, home seat) whenever operations change.
+`CharacterAnimator` — a single `useFrame` for the whole workforce — first steps every activity machine, then updates
+every rig. The rig compares the activity destination with its own plan, plans a journey when it changed, walks it,
+reports arrival (which is what lets the machine move on from `WALKING`), and blends joints with an exponential damping
+(`1 − e^(−14·dt)`) so pose changes cross-fade instead of snapping. 27 agents cost ≈ 0.06 ms per frame in the harness.
+
+### What is deliberately not here
+
+No animation clips, no GLB assets, no skinning, no physics engine, no third-party pathfinding. Nothing is fetched at
+runtime. The trade-off is visible in the look: the characters are stylised miniatures rather than scanned humans, and
+the walk cycle is procedural rather than motion-captured.

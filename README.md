@@ -84,6 +84,46 @@ still runs and the floor/room navigation, task board and inspector remain fully 
   online and clearing an error. Moving an agent is an explicit, validated operation that updates the spatial assignment
   and the rendered position at the same time.
 
+### Agent navigation and movement
+
+- Agents are no longer placed at coordinates: they **walk**. `src/scene/character/navigation.ts` builds a cached
+  0.2 m occupancy grid per floor from the real walls, doors and furniture, inflated by the 0.26 m body radius. Routes are
+  A\* over that grid and then smoothed with a line-of-sight pass, so a path leaves a room through its actual door, walks
+  the corridor and enters through a second door instead of cutting a diagonal through a desk.
+- Right-hand traffic is planned, not improvised: colleagues heading east walk the south lane and colleagues heading west
+  walk the north lane, so opposing trips are already separated before anybody moves.
+- `src/scene/character/journey.ts` stitches a trip between floors: room → corridor → lift → corridor → room, with the
+  walker hidden while the doors are closed and its elevation following the storey it is on.
+- Walking is frame-rate independent (1.05 m/s, clamped delta), facing is damped rather than snapped, and a colleague
+  always stops where the seat anchor is — never on the desk, never inside the chair.
+- **Avoidance**: a colleague whose path passes within arm's reach slows down; when two people genuinely cross, the one
+  with the higher id yields and steps to its own right while the other keeps walking. Both keep moving (no deadlock) and
+  a head-on crossing in the 3.6 m corridor keeps ≥ 0.55 m between them while both keep walking.
+- **Blocked destinations** are handled honestly: an unreachable point is reported (`UNREACHABLE` / `OUT_OF_BOUNDS`) and
+  the agent stays where it is with a console explanation instead of sliding through walls; if a destination is walled
+  off but the surrounding space is walkable, the route ends at the closest reachable point and the journey is flagged.
+- `npm run stats`-level guarantees are covered by tests: every one of the 65 workstation anchors and every room is
+  routable, and every walkable cell on every floor is reachable from the lift (no isolated pockets).
+
+### Autonomous activities
+
+- Each agent runs a finite state machine (`src/scene/character/activity.ts`) with the full animation vocabulary:
+  `IDLE`, `WALKING`, `TURNING`, `SITTING_DOWN`, `SITTING`, `STANDING_UP`, `TYPING`, `READING`, `THINKING`, `TALKING`,
+  `MEETING`, `PICKING_UP`, `RETURNING_TO_WORK`.
+- Activities are **role-coherent and operational**: engineers type, analysts read, commercial roles talk, management
+  convenes. Desk activity is chosen from the role's own set on a seeded rhythm (22–30 s, different per colleague), with
+  an occasional reach for something on the floor. Nothing is invented about the work itself: every activity carries the
+  task title and the operational reason that caused it, and no result is fabricated.
+- Transitions follow the real task system: a task arriving makes the colleague sit down before working; a task that
+  finishes makes them stand, walk it off and sit back down; a task changed or cancelled mid-work is recorded in the
+  agent's activity history and the destination is re-planned.
+- Meetings are real: management roles convene on their own floor, seats are allocated deterministically from the chairs
+  actually placed around the meeting table (no two colleagues on one chair, everyone oriented toward the table), and the
+  agent walks there, sits, stays for the meeting and walks back.
+- One scheduler (`src/scene/character/activitySystem.ts`) advances all 27 machines per frame (~0.06 ms per frame in the
+  test harness), then the single rig callback poses the bodies: no per-agent render loop, no React re-render during
+  animation.
+
 ### Tasks and execution
 
 - Explicit state machine: `QUEUED → RUNNING → COMPLETED`, `RUNNING → WAITING → RUNNING`, `RUNNING|WAITING|QUEUED →
@@ -192,12 +232,18 @@ Copy `.env.example` to `.env.local` to configure the bridge. Without it, live mo
 | --- | --- |
 | `tsc --noEmit` | Passes |
 | `next build` | Passes (static `/` + dynamic `/api/executions`) |
-| `npm test` | 137 passed / 137 across 9 files |
+| `npm test` | 186 passed / 186 across 12 files |
 | `npm run validate` | 5 floors, 38 rooms, 65 workstations, no warnings |
 | `GET /api/executions` | `200` `{mode:"unavailable"}` |
 | `POST /api/executions` (unconfigured) | `501 INTEGRATION_UNAVAILABLE` |
 | `POST /api/executions` (invalid body) | `400 INVALID_REQUEST` |
 | Scene graph (headless R3F render) | All 5 floors, cutaway, floor isolation and click navigation render without errors |
+| Agent routing | 65/65 workstation anchors routable; cross-room routes leave and enter through doors; every walkable cell is reachable from the lift on all 5 floors |
+| Agent walking (headless R3F) | A relocated colleague walks desk→desk in ≤ 0.12 m per frame (no teleport), covers the true path length, and stops within 0.4 m of the target seat |
+| Crossing without collision | Two colleagues walking opposite ways through the corridor keep ≥ 0.55 m separation and both arrive |
+| Activity FSM | 13 animation states, role-coherent sets, task start/finish/change transitions, meeting seat allocation and return, deterministic and staggered |
+| Scheduler cost | 27 agents × 1 800 frames in 101 ms (≈ 0.06 ms/frame) in the test harness |
+| Navigation grids | 20 ms to build all five floors; ≈ 9 500 walkable cells of 16 200 per floor; 2.1 ms per route |
 | Characters (headless) | 27 rigs registered and released, a WAITING agent walks 0.45–1.1 m from its chair, a WORKING agent stays seated (tests) |
 | Feet/hands alignment (FK) | Lower sole ≤ 1 mm from the floor in every state/seed/frame; seated wrists at 0.68–0.90 m (desk top 0.74 m) |
 | `npm run stats` | 60 meshes per full-detail colleague, 21 compact; cutaway ≈ 2432 submissions |

@@ -59,10 +59,16 @@ export type SeatedActivity =
   | 'TYPING'
   | 'USING_MOUSE'
   | 'READING_SCREEN'
-  | 'THINKING';
+  | 'THINKING'
+  | 'TALKING'
+  | 'MEETING';
 
 /** Standing activities happen beside the workstation. */
-export type StandingActivity = 'IDLE_STANDING' | 'WAITING' | 'ERROR_REVIEW';
+export type StandingActivity =
+  | 'IDLE_STANDING'
+  | 'WAITING'
+  | 'ERROR_REVIEW'
+  | 'PICKING_UP';
 
 export type PhysicalActivity = SeatedActivity | StandingActivity | 'WALKING';
 
@@ -356,6 +362,38 @@ function applySeatedActivity(
       pose.fingersL = 0.4;
       break;
     }
+    case 'TALKING': {
+      // Turned toward a colleague: head mostly on them, right hand marking a
+      // point above the desk in short, restrained beats.
+      const beat = pulse(t, 5.5, seed * 2.1, 0.9);
+      add(pose, 'chest', 0, 0.12 + glance * 0.1);
+      add(pose, 'shoulderR', -0.28 - beat * 0.16, -0.22);
+      add(pose, 'elbowR', -0.55 + beat * 0.2);
+      add(pose, 'wristR', 0.12 + beat * 0.14);
+      add(pose, 'shoulderL', 0.04, 0.1);
+      add(pose, 'elbowL', -0.22);
+      add(pose, 'head', -0.02 + Math.sin(t * 0.9 + phase) * 0.05, 0.26 + glance * 0.2);
+      pose.fingersR = 0.3;
+      pose.fingersL = 0.32;
+      break;
+    }
+    case 'MEETING': {
+      // Seated at a meeting table: forearms down, attention on the speaker,
+      // slow agreement nods instead of gestures.
+      const nod = pulse(t, 4.4, seed * 1.7, 0.6);
+      add(pose, 'spine', -0.06);
+      add(pose, 'chest', 0, glance * 0.06);
+      add(pose, 'shoulderL', 0.12, 0.08);
+      add(pose, 'shoulderR', 0.12, -0.08);
+      add(pose, 'elbowL', -0.34);
+      add(pose, 'elbowR', -0.34);
+      add(pose, 'wristL', 0.06);
+      add(pose, 'wristR', 0.06);
+      add(pose, 'head', -0.05 + nod * 0.1, glance * 0.5, Math.sin(t * 0.2 + phase) * 0.02);
+      pose.fingersL = 0.36;
+      pose.fingersR = 0.36;
+      break;
+    }
     default: {
       // IDLE_SEATED: upright, hands near the keyboard, occasional posture shift.
       const shift = pulse(t, 17, seed * 1.3, 0.45);
@@ -394,6 +432,22 @@ function applyStandingActivity(
       add(pose, 'head', 0.02, glance, 0.02);
       pose.fingersL = 0.45;
       pose.fingersR = 0.45;
+      break;
+    }
+    case 'PICKING_UP': {
+      // Short bend to lift something from the floor beside the desk and rise.
+      const grab = pulse(t, 6.5, seed * 1.1, 0.55);
+      add(pose, 'hips', grab * 0.42);
+      add(pose, 'spine', grab * 0.34);
+      add(pose, 'chest', grab * 0.12);
+      add(pose, 'shoulderR', -grab * 0.9, -0.1);
+      add(pose, 'elbowR', -grab * 0.35);
+      add(pose, 'shoulderL', -grab * 0.25, 0.08);
+      add(pose, 'kneeL', grab * 0.22);
+      add(pose, 'kneeR', grab * 0.22);
+      add(pose, 'head', grab * 0.5, glance * 0.3);
+      pose.fingersR = 0.55 + grab * 0.35;
+      pose.fingersL = 0.3;
       break;
     }
     case 'ERROR_REVIEW': {

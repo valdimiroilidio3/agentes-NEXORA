@@ -18,6 +18,7 @@ import {
 import { AGENT_STATUS_LABELS } from '@/domain/agents';
 import { TASK_STATUS_LABELS, unmetDependencies } from '@/domain/tasks';
 import { formatDateTime, formatDuration, formatRelative, formatTime } from '@/lib/time';
+import { agentActivity as agentActivityFor } from '@/scene/character/activitySystem';
 import {
   Badge,
   Button,
@@ -204,6 +205,8 @@ function AgentContext({ agentId }: { agentId: string }) {
   const selectRoom = useOfficeStore((state) => state.selectRoom);
   const selectTask = useOfficeStore((state) => state.selectTask);
   const setAgentStatus = useOfficeStore((state) => state.setAgentStatus);
+  const moveAgent = useOfficeStore((state) => state.moveAgent);
+  const [relocateTo, setRelocateTo] = useState('');
 
   const agent = agentById(agents, agentId);
   if (!agent) return <EmptyState title="Agent unavailable" />;
@@ -212,6 +215,21 @@ function AgentContext({ agentId }: { agentId: string }) {
   const currentTask = taskById(tasks, agent.currentTaskId);
   const assigned = tasks.filter((task) => task.agentId === agent.id);
   const agentEvents = eventsForAgent(events, agent.id);
+
+  const occupied = new Set(agents.map((candidate) => candidate.workstationId));
+  const destinations = (building?.floors ?? []).flatMap((floor) =>
+    floor.rooms
+      .filter((candidate) => candidate.id !== agent.roomId)
+      .map((candidate) => ({
+        floor,
+        room: candidate,
+        free: candidate.workstations.filter((station) => !occupied.has(station.id)),
+      }))
+      .filter((entry) => entry.free.length > 0),
+  );
+  const relocateTarget = destinations.find((entry) => entry.room.id === relocateTo);
+  // Snapshot of the live activity machine (undefined when the canvas is closed).
+  const agentActivity = agentActivityFor(agent.id);
 
   return (
     <div className="stack">
@@ -236,6 +254,30 @@ function AgentContext({ agentId }: { agentId: string }) {
         <KeyValue label="Last activity">{formatRelative(agent.lastActivityAt)}</KeyValue>
         <KeyValue label="Executor contract">{agent.execution?.provider ?? 'not configured'}</KeyValue>
       </section>
+
+      <Section title="Present activity">
+        {agentActivity ? (
+          <>
+            <p>
+              <strong>{agentActivity.label}</strong>
+              {agentActivity.destination.kind === 'meeting' && (
+                <span className="muted"> · in a meeting room</span>
+              )}
+            </p>
+            <p className="muted">{agentActivity.reason}</p>
+            <p className="hint">
+              Animation state <code>{agentActivity.animation.posture}</code> · activity{' '}
+              <code>{agentActivity.activity}</code>. Read from the live behaviour model when this panel
+              rendered; it is not a work result.
+            </p>
+          </>
+        ) : (
+          <EmptyState
+            title="No behaviour state"
+            hint="The 3D scene is not mounted, so this agent has no activity machine running."
+          />
+        )}
+      </Section>
 
       <Section title="Current task">
         {currentTask ? (
@@ -279,6 +321,41 @@ function AgentContext({ agentId }: { agentId: string }) {
         </div>
         <p className="hint">
           Agent status always follows task execution. Only offline and error-clearing are operator actions.
+        </p>
+      </Section>
+
+      <Section title="Relocate" aside={<span className="muted">{destinations.length} rooms</span>}>
+        <div className="row-actions">
+          <select
+            className="select"
+            aria-label={`Relocate ${agent.name} to another room`}
+            value={relocateTo}
+            onChange={(event) => setRelocateTo(event.target.value)}
+          >
+            <option value="">Select a free workstation…</option>
+            {destinations.map((entry) => (
+              <option key={entry.room.id} value={entry.room.id}>
+                {entry.floor.name} · {entry.room.name} ({entry.free.length} free)
+              </option>
+            ))}
+          </select>
+          <Button
+            size="sm"
+            disabled={!relocateTarget}
+            onClick={() => {
+              if (!relocateTarget) return;
+              const station = relocateTarget.free[0];
+              if (!station) return;
+              moveAgent(agent.id, relocateTarget.room.id, station.id);
+              setRelocateTo('');
+            }}
+          >
+            Move
+          </Button>
+        </div>
+        <p className="hint">
+          Moving is a validated assignment change: the agent stands up, walks the corridor and sits at the
+          new workstation. Floors are connected by the lift in the core.
         </p>
       </Section>
 
