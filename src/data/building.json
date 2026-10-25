@@ -1,0 +1,746 @@
+{
+  "building": {
+    "id": "nexora-hq",
+    "name": "NEXORA Headquarters",
+    "footprint": {
+      "width": 36.0,
+      "depth": 18.0
+    },
+    "floorHeight": 4.2,
+    "slabThickness": 0.3,
+    "corridorDepth": 3.6,
+    "interiorWallThickness": 0.12,
+    "exteriorWallThickness": 0.6
+  },
+  "floors": [
+    {
+      "id": "floor-0",
+      "index": 0,
+      "name": "Ground Floor",
+      "department": "reception-command",
+      "ceilingHeight": 3.4,
+      "rooms": [
+        {
+          "id": "g-security",
+          "name": "Security & Access",
+          "code": "G-01",
+          "template": "security",
+          "purpose": "security",
+          "rect": {
+            "x": -12.95,
+            "z": -5.1,
+            "width": 8.9,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "south",
+            "offset": 1.5,
+            "width": 1.2
+          }
+        },
+        {
+          "id": "g-core",
+          "name": "Vertical Core",
+          "code": "G-02",
+          "template": "core",
+          "purpose": "circulation",
+          "rect": {
+            "x": -6.0,
+            "z": -5.1,
+            "width": 5.0,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "south",
+            "offset": 0.0,
+            "width": 1.8
+          }
+        },
+        {
+          "id": "g-reception",
+          "name": "Reception & Entrance",
+          "code": "G-03",
+          "template": "reception",
+          "purpose": "reception",
+          "rect": {
+            "x": 6.95,
+            "z": -5.1,
+            "width": 20.9,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "south",
+            "offset": -7.0,
+            "width": 2.2
+          }
+        },
+        {
+          "id": "g-command",
+          "name": "Command Center",
+          "code": "G-04",
+          "template": "operations-center",
+          "purpose": "command",
+          "rect": {
+            "x": -8.2,
+            "z": 5.1,
+            "width": 18.4,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "north",
+            "offset": 1.0,
+            "width": 2.4
+          }
+        },
+        {
+          "id": "g-lounge",
+          "name": "Staff Lounge",
+          "code": "G-05",
+          "template": "lounge",
+          "purpose": "hospitality",
+          "rect": {
+            "x": 4.7,
+            "z": 5.1,
+            "width": 7.4,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "north",
+            "offset": 0.0,
+            "width": 1.6
+          }
+        },
+        {
+          "id": "g-incident",
+          "name": "Incident Room",
+          "code": "G-06",
+          "template": "meeting-room",
+          "purpose": "meeting",
+          "rect": {
+            "x": 12.9,
+            "z": 5.1,
+            "width": 9.0,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "north",
+            "offset": 0.0,
+            "width": 1.2
+          }
+        }
+      ]
+    },
+    {
+      "id": "floor-1",
+      "index": 1,
+      "name": "Marketing & Creative",
+      "department": "marketing",
+      "ceilingHeight": 3.1,
+      "rooms": [
+        {
+          "id": "f1-editorial",
+          "name": "Editorial Office",
+          "code": "1-01",
+          "template": "private-office",
+          "purpose": "content",
+          "rect": {
+            "x": -12.95,
+            "z": -5.1,
+            "width": 8.9,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "south",
+            "offset": 0.0,
+            "width": 1.2
+          }
+        },
+        {
+          "id": "f1-core",
+          "name": "Vertical Core",
+          "code": "1-02",
+          "template": "core",
+          "purpose": "circulation",
+          "rect": {
+            "x": -6.0,
+            "z": -5.1,
+            "width": 5.0,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "south",
+            "offset": 0.0,
+            "width": 1.8
+          }
+        },
+        {
+          "id": "f1-content",
+          "name": "Content Studio",
+          "code": "1-03",
+          "template": "creative-studio",
+          "purpose": "content",
+          "rect": {
+            "x": 1.8,
+            "z": -5.1,
+            "width": 10.6,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "south",
+            "offset": 2.0,
+            "width": 1.4
+          }
+        },
+        {
+          "id": "f1-brand",
+          "name": "Brand Design Lab",
+          "code": "1-04",
+          "template": "creative-studio",
+          "purpose": "design",
+          "rect": {
+            "x": 12.25,
+            "z": -5.1,
+            "width": 10.3,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "south",
+            "offset": -2.0,
+            "width": 1.4
+          }
+        },
+        {
+          "id": "f1-research",
+          "name": "Market Research",
+          "code": "1-05",
+          "template": "open-workspace",
+          "purpose": "research",
+          "rect": {
+            "x": -11.8,
+            "z": 5.1,
+            "width": 11.2,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "north",
+            "offset": 0.0,
+            "width": 1.6
+          }
+        },
+        {
+          "id": "f1-campaigns",
+          "name": "Campaign Analysis",
+          "code": "1-06",
+          "template": "meeting-room",
+          "purpose": "campaigns",
+          "rect": {
+            "x": -2.5,
+            "z": 5.1,
+            "width": 7.4,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "north",
+            "offset": 0.0,
+            "width": 1.2
+          }
+        },
+        {
+          "id": "f1-copy",
+          "name": "Copy & Content",
+          "code": "1-07",
+          "template": "open-workspace",
+          "purpose": "content",
+          "rect": {
+            "x": 5.8,
+            "z": 5.1,
+            "width": 9.2,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "north",
+            "offset": 0.0,
+            "width": 1.6
+          }
+        },
+        {
+          "id": "f1-focus",
+          "name": "Focus Room",
+          "code": "1-08",
+          "template": "private-office",
+          "purpose": "content",
+          "rect": {
+            "x": 13.9,
+            "z": 5.1,
+            "width": 7.0,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "north",
+            "offset": 0.0,
+            "width": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "floor-2",
+      "index": 2,
+      "name": "Sales & Clients",
+      "department": "sales",
+      "ceilingHeight": 3.1,
+      "rooms": [
+        {
+          "id": "f2-director",
+          "name": "Sales Director",
+          "code": "2-01",
+          "template": "executive-office",
+          "purpose": "executive",
+          "rect": {
+            "x": -12.95,
+            "z": -5.1,
+            "width": 8.9,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "south",
+            "offset": 0.0,
+            "width": 1.2
+          }
+        },
+        {
+          "id": "f2-core",
+          "name": "Vertical Core",
+          "code": "2-02",
+          "template": "core",
+          "purpose": "circulation",
+          "rect": {
+            "x": -6.0,
+            "z": -5.1,
+            "width": 5.0,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "south",
+            "offset": 0.0,
+            "width": 1.8
+          }
+        },
+        {
+          "id": "f2-leads",
+          "name": "Lead Qualification",
+          "code": "2-03",
+          "template": "open-workspace",
+          "purpose": "prospecting",
+          "rect": {
+            "x": 2.7,
+            "z": -5.1,
+            "width": 12.4,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "south",
+            "offset": -1.5,
+            "width": 1.6
+          }
+        },
+        {
+          "id": "f2-proposals",
+          "name": "Proposals Studio",
+          "code": "2-04",
+          "template": "open-workspace",
+          "purpose": "proposals",
+          "rect": {
+            "x": 13.15,
+            "z": -5.1,
+            "width": 8.5,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "south",
+            "offset": 0.0,
+            "width": 1.4
+          }
+        },
+        {
+          "id": "f2-meeting-a",
+          "name": "Client Meeting A",
+          "code": "2-05",
+          "template": "meeting-room",
+          "purpose": "client-relations",
+          "rect": {
+            "x": -13.6,
+            "z": 5.1,
+            "width": 7.6,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "north",
+            "offset": 0.0,
+            "width": 1.2
+          }
+        },
+        {
+          "id": "f2-meeting-b",
+          "name": "Client Meeting B",
+          "code": "2-06",
+          "template": "meeting-room",
+          "purpose": "client-relations",
+          "rect": {
+            "x": -6.2,
+            "z": 5.1,
+            "width": 7.2,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "north",
+            "offset": 0.0,
+            "width": 1.2
+          }
+        },
+        {
+          "id": "f2-accounts",
+          "name": "Account Management",
+          "code": "2-07",
+          "template": "open-workspace",
+          "purpose": "client-relations",
+          "rect": {
+            "x": 3.4,
+            "z": 5.1,
+            "width": 12.0,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "north",
+            "offset": 0.0,
+            "width": 1.6
+          }
+        },
+        {
+          "id": "f2-followup",
+          "name": "Follow-up Desk",
+          "code": "2-08",
+          "template": "private-office",
+          "purpose": "client-relations",
+          "rect": {
+            "x": 13.4,
+            "z": 5.1,
+            "width": 8.0,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "north",
+            "offset": 0.0,
+            "width": 1.2
+          }
+        }
+      ]
+    },
+    {
+      "id": "floor-3",
+      "index": 3,
+      "name": "Technology",
+      "department": "technology",
+      "ceilingHeight": 3.1,
+      "rooms": [
+        {
+          "id": "f3-qa",
+          "name": "QA Laboratory",
+          "code": "3-01",
+          "template": "lab",
+          "purpose": "quality",
+          "rect": {
+            "x": -12.95,
+            "z": -5.1,
+            "width": 8.9,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "south",
+            "offset": 0.0,
+            "width": 1.2
+          }
+        },
+        {
+          "id": "f3-core",
+          "name": "Vertical Core",
+          "code": "3-02",
+          "template": "core",
+          "purpose": "circulation",
+          "rect": {
+            "x": -6.0,
+            "z": -5.1,
+            "width": 5.0,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "south",
+            "offset": 0.0,
+            "width": 1.8
+          }
+        },
+        {
+          "id": "f3-engineering",
+          "name": "Engineering Floor",
+          "code": "3-03",
+          "template": "open-workspace",
+          "purpose": "engineering",
+          "rect": {
+            "x": 3.5,
+            "z": -5.1,
+            "width": 14.0,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "south",
+            "offset": 0.0,
+            "width": 1.8
+          }
+        },
+        {
+          "id": "f3-infra",
+          "name": "Infrastructure Ops",
+          "code": "3-04",
+          "template": "lab",
+          "purpose": "infrastructure",
+          "rect": {
+            "x": 13.95,
+            "z": -5.1,
+            "width": 6.9,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "south",
+            "offset": 0.0,
+            "width": 1.2
+          }
+        },
+        {
+          "id": "f3-api",
+          "name": "API & Integration Lab",
+          "code": "3-05",
+          "template": "lab",
+          "purpose": "integration",
+          "rect": {
+            "x": -11.6,
+            "z": 5.1,
+            "width": 11.6,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "north",
+            "offset": 0.0,
+            "width": 1.4
+          }
+        },
+        {
+          "id": "f3-review",
+          "name": "Code Review Room",
+          "code": "3-06",
+          "template": "meeting-room",
+          "purpose": "engineering",
+          "rect": {
+            "x": -2.3,
+            "z": 5.1,
+            "width": 7.0,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "north",
+            "offset": 0.0,
+            "width": 1.2
+          }
+        },
+        {
+          "id": "f3-platform",
+          "name": "Platform Team",
+          "code": "3-07",
+          "template": "open-workspace",
+          "purpose": "engineering",
+          "rect": {
+            "x": 6.3,
+            "z": 5.1,
+            "width": 10.2,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "north",
+            "offset": 0.0,
+            "width": 1.6
+          }
+        },
+        {
+          "id": "f3-focus",
+          "name": "Focus Pod",
+          "code": "3-08",
+          "template": "private-office",
+          "purpose": "engineering",
+          "rect": {
+            "x": 14.4,
+            "z": 5.1,
+            "width": 6.0,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "north",
+            "offset": 0.0,
+            "width": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "floor-4",
+      "index": 4,
+      "name": "Management & Operations",
+      "department": "management",
+      "ceilingHeight": 3.1,
+      "rooms": [
+        {
+          "id": "f4-exec",
+          "name": "Executive Office",
+          "code": "4-01",
+          "template": "executive-office",
+          "purpose": "executive",
+          "rect": {
+            "x": -12.95,
+            "z": -5.1,
+            "width": 8.9,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "south",
+            "offset": 0.0,
+            "width": 1.2
+          }
+        },
+        {
+          "id": "f4-core",
+          "name": "Vertical Core",
+          "code": "4-02",
+          "template": "core",
+          "purpose": "circulation",
+          "rect": {
+            "x": -6.0,
+            "z": -5.1,
+            "width": 5.0,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "south",
+            "offset": 0.0,
+            "width": 1.8
+          }
+        },
+        {
+          "id": "f4-board",
+          "name": "Board Room",
+          "code": "4-03",
+          "template": "meeting-room",
+          "purpose": "board",
+          "rect": {
+            "x": 2.7,
+            "z": -5.1,
+            "width": 12.4,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "south",
+            "offset": 0.0,
+            "width": 1.8
+          }
+        },
+        {
+          "id": "f4-finance",
+          "name": "Finance",
+          "code": "4-04",
+          "template": "private-office",
+          "purpose": "finance",
+          "rect": {
+            "x": 13.15,
+            "z": -5.1,
+            "width": 8.5,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "south",
+            "offset": 0.0,
+            "width": 1.2
+          }
+        },
+        {
+          "id": "f4-delivery",
+          "name": "Project Delivery",
+          "code": "4-05",
+          "template": "open-workspace",
+          "purpose": "delivery",
+          "rect": {
+            "x": -11.2,
+            "z": 5.1,
+            "width": 12.4,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "north",
+            "offset": 0.0,
+            "width": 1.6
+          }
+        },
+        {
+          "id": "f4-docs",
+          "name": "Documentation Hub",
+          "code": "4-06",
+          "template": "open-workspace",
+          "purpose": "knowledge",
+          "rect": {
+            "x": -0.9,
+            "z": 5.1,
+            "width": 8.2,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "north",
+            "offset": 0.0,
+            "width": 1.4
+          }
+        },
+        {
+          "id": "f4-strategy",
+          "name": "Strategy Room",
+          "code": "4-07",
+          "template": "meeting-room",
+          "purpose": "board",
+          "rect": {
+            "x": 6.3,
+            "z": 5.1,
+            "width": 6.2,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "north",
+            "offset": 0.0,
+            "width": 1.2
+          }
+        },
+        {
+          "id": "f4-ea",
+          "name": "Executive Assistant",
+          "code": "4-08",
+          "template": "private-office",
+          "purpose": "executive",
+          "rect": {
+            "x": 13.4,
+            "z": 5.1,
+            "width": 8.0,
+            "depth": 6.6
+          },
+          "door": {
+            "edge": "north",
+            "offset": 0.0,
+            "width": 1.2
+          }
+        }
+      ]
+    }
+  ]
+}
