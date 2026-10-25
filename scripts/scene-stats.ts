@@ -13,10 +13,36 @@ import { loadBuilding } from '../src/domain/building';
 import { buildCeilingLights, buildDoors, buildFloorBase, buildWalls } from '../src/scene/architecture';
 import { buildEndFacade, buildFacadeFins, buildFloorFacade, buildRoof, buildSite } from '../src/scene/facade';
 import { drawCallCount } from '../src/scene/SceneBoxes';
+import { parseAgents } from '../src/domain/schema';
+import { appearanceFor } from '../src/scene/character/appearance';
+import { characterBudget, type DetailLevel } from '../src/scene/character/parts';
 import type { Building, Floor } from '../src/domain/types';
 
 const raw = JSON.parse(readFileSync(join(process.cwd(), 'src/data/building.json'), 'utf8')) as unknown;
 const { building } = loadBuilding(raw);
+const agents = parseAgents(
+  JSON.parse(readFileSync(join(process.cwd(), 'src/data/agents.json'), 'utf8')) as unknown,
+);
+
+const floorOfRoom = new Map<string, string>();
+for (const floor of building.floors) {
+  for (const room of floor.rooms) floorOfRoom.set(room.id, floor.id);
+}
+
+/** Draw cost of the characters living on one floor, at the given detail tier. */
+function characterCost(floor: Floor, detail: DetailLevel): number {
+  return agents
+    .filter((agent) => floorOfRoom.get(agent.roomId) === floor.id)
+    .reduce((sum, agent) => {
+      const budget = characterBudget(appearanceFor(agent.id));
+      return (
+        sum +
+        (detail === 'full'
+          ? budget.fullBodyParts + budget.fullChairParts
+          : budget.bodyParts + budget.chairParts)
+      );
+    }, 0);
+}
 
 const FURNITURE_MESHES: Record<string, number> = {
   desk: 8, chair: 4, monitor: 3, shelf: 6, sofa: 6, 'coffee-table': 5, 'meeting-table': 4,
@@ -30,7 +56,11 @@ interface FloorCost {
   agents: number;
 }
 
-function floorCost(building: Building, floor: Floor, options: { facade: boolean; hideNorth?: boolean; interior: boolean }): FloorCost {
+function floorCost(
+  building: Building,
+  floor: Floor,
+  options: { facade: boolean; hideNorth?: boolean; interior: boolean; characters?: DetailLevel },
+): FloorCost {
   const specs = [
     ...buildFloorBase(building, floor),
     ...buildWalls(building, floor),
@@ -49,8 +79,12 @@ function floorCost(building: Building, floor: Floor, options: { facade: boolean;
     (sum, room) => sum + room.furniture.reduce((n, item) => n + (FURNITURE_MESHES[item.kind] ?? 3), 0),
     0,
   );
-  const seats = floor.rooms.reduce((sum, room) => sum + room.workstations.length, 0);
-  return { shell, interior: lights + furniture, agents: seats * 5 };
+  const characters = options.characters ?? 'compact';
+  return {
+    shell,
+    interior: lights + furniture,
+    agents: characterCost(floor, characters),
+  };
 }
 
 const site = drawCallCount(buildSite(building));
@@ -63,12 +97,17 @@ const exterior = building.floors.reduce(
 );
 const overview = exterior;
 const cutaway = building.floors.reduce((sum, floor) => {
-  const cost = floorCost(building, floor, { facade: true, hideNorth: true, interior: true });
+  const cost = floorCost(building, floor, {
+    facade: true,
+    hideNorth: true,
+    interior: true,
+    characters: 'compact',
+  });
   return sum + cost.shell + cost.interior + cost.agents + 3; // 3 point lights per floor
 }, 0);
 const isolated = (() => {
   const floor = building.floors[3]!;
-  const cost = floorCost(building, floor, { facade: false, interior: true });
+  const cost = floorCost(building, floor, { facade: false, interior: true, characters: 'full' });
   return cost.shell + cost.interior + cost.agents + 3;
 })();
 
@@ -81,7 +120,11 @@ const rows: Array<[string, number]> = [
 
 console.log('NEXORA OFFICE 3D — static scene budget (draw-call submissions)\n');
 for (const floor of building.floors) {
-  const cost = floorCost(building, floor, { facade: true, interior: true });
+  const cost = floorCost(building, floor, {
+    facade: true,
+    interior: true,
+    characters: 'full',
+  });
   console.log(
     `  ${floor.name.padEnd(26)} shell ${String(cost.shell).padStart(4)} · interior ${String(cost.interior).padStart(4)} · agents ${String(cost.agents).padStart(4)}`,
   );
@@ -96,6 +139,14 @@ const furniture = building.floors.reduce(
   0,
 );
 const seats = building.floors.reduce((sum, floor) => sum + floor.rooms.reduce((n, room) => n + room.workstations.length, 0), 0);
-console.log(`\n  Rooms: ${building.floors.reduce((n, floor) => n + floor.rooms.length, 0)} · furniture items: ${furniture} · seats: ${seats}`);
+const sample = characterBudget(appearanceFor(agents[0]!.id));
+console.log(
+  `\n  Rooms: ${building.floors.reduce((n, floor) => n + floor.rooms.length, 0)} · furniture items: ${furniture} · seats: ${seats} · agents: ${agents.length}`,
+);
+console.log(
+  `  One colleague: ${sample.fullBodyParts + sample.fullChairParts} meshes at full detail · ${sample.bodyParts + sample.chairParts} at compact detail (chair included).`,
+);
 console.log('  Repeated mullions, columns, fins and frames are instanced; interiors use a');
-console.log('  level-of-detail switch so the closed overview does not pay for furniture.\n');
+console.log('  level-of-detail switch so the closed overview does not pay for furniture.');
+console.log('  Characters: 1 rig handle each, updated by one shared frame callback;');
+console.log('  the cutaway overview switches them to the compact rig.\n');

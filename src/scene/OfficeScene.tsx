@@ -11,6 +11,7 @@ import type { OperationsState } from '@/domain/operations';
 import { buildFacadeFins, buildRoof, buildSite, entranceXFor } from './facade';
 import { SceneBoxes } from './SceneBoxes';
 import { FloorLights, FloorLiveLayer, FloorShell } from './FloorScene';
+import { CharacterAnimator } from './character/characterSystem';
 import { computeCameraPose, cameraLimits, type CameraPose } from './camera';
 import { sceneLayers, visibleFloors } from './visibility';
 import { FacadeSign } from './Labels';
@@ -235,10 +236,14 @@ export function SceneWorld({
   // Interiors are only worth drawing when the user can actually see them.
   const showInterior =
     viewMode === 'floor' || viewMode === 'room' || (viewMode === 'building' && cutaway);
+  // Full character detail inside a floor/room; a lighter rig for the cutaway
+  // overview where 27 people share the frame.
+  const characterDetail = viewMode === 'floor' || viewMode === 'room' ? 'full' : 'compact';
   const entranceX = entranceXFor(building);
 
   return (
     <>
+      <CharacterAnimator />
       <color attach="background" args={['#070a0d']} />
       <fog attach="fog" args={['#070a0d', 95, 260]} />
       <Lighting />
@@ -269,6 +274,7 @@ export function SceneWorld({
             selectedAgentId={selectedAgentId}
             hoveredRoomId={hoveredRoomId}
             showInterior={showInterior}
+            characterDetail={characterDetail}
             onSelectRoom={onSelectRoom}
             onHoverRoom={onHoverRoom}
             onSelectAgent={onSelectAgent}

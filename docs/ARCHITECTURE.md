@@ -110,7 +110,12 @@ corrupting state.
 | `scene/architecture.ts` | Pure `BoxSpec` generation: slabs, finishes, walls with door openings, doors, columns, light fixtures, room ceilings |
 | `scene/facade.ts` | Curtain walls, ribbon glazing, fins, roof, site, entrance, sign position |
 | `scene/Furniture.tsx` | Catalogue of 19 furniture kinds from primitive meshes |
-| `scene/AgentAvatar.tsx` | Seat, body, status ring (pulses only when working) |
+| `scene/character/appearance.ts` | Deterministic per-agent look: height, build, skin, hair, clothing, glasses, phase |
+| `scene/character/parts.ts` | Part catalogue (data) for body and chair, in two LOD tiers |
+| `scene/character/pose.ts` | Pure pose engine + forward kinematics + grounding |
+| `scene/character/behaviour.ts` | Status → posture mapping, micro-activity schedule, locomotion integrator |
+| `scene/character/AgentCharacter.tsx` | Joint hierarchy renderer + task chair |
+| `scene/character/characterSystem.tsx` | Rig registry and the single frame loop (`CharacterAnimator`) |
 | `scene/FloorScene.tsx` | `FloorShell` (memoised architecture + furniture), `FloorLiveLayer` (highlights, labels, agents, activity strips), lights |
 | `scene/OfficeScene.tsx` | Canvas, environment, camera rig, HUD probe; `SceneWorld` is the pure scene graph |
 | `scene/visibility.ts` | Visible floors and façade/roof/fin layers per view |
@@ -182,3 +187,62 @@ is merging each room's furniture into per-material geometry (target: cutaway bel
   in the store; nothing in the scene or reducer changes.
 - Persistence: the reducer emits a complete event log, so writing tasks/events to Postgres/Supabase is an adapter
   concern; server-side authorisation must be added before multi-user use.
+
+## 10. Characters
+
+### Rig
+
+A colleague is a hierarchy of groups — `hips → spine → chest → {neck → head, shoulder → elbow → wrist}`, and
+`hips → hip → knee → ankle` — carrying shared primitive meshes. There is no skinning: the parts are rigid pieces
+attached to joints, which keeps the draw cost predictable and the pose maths testable. Proportions are derived from a
+single standing height:
+
+| Segment | Fraction of height |
+| --- | --- |
+| hip joint height | 0.530 |
+| thigh / shin / ankle | 0.245 / 0.246 / 0.039 |
+| hip → chest | 0.230 |
+| shoulder height | 0.810 |
+| skull base → crown | 0.130 |
+
+The three leg segments sum exactly to the hip height, so a straight leg stands on the floor with no correction.
+
+### Pose engine
+
+`buildPose` composes a seated pose and a standing pose, adds activity detail, blends them by `seatedMix`, layers the
+walk cycle, and finally **grounds** the result: `solveSkeleton` resolves world-space joint positions, and the hip height
+is offset so the lower sole is exactly on the floor. Grounding is what makes a walk cycle work without root motion —
+the support foot stays planted while the swing foot clears by ~5 cm.
+
+Seated hands are tuned against the furniture: elbows are just below the desk top (0.74 m) and the forearms are
+horizontal, putting the wrists at 0.73–0.79 m depending on the occupant's height.
+
+### Behaviour mapping
+
+Business state and posture are separate:
+
+| Agent status | Posture | Activity |
+| --- | --- | --- |
+| `WORKING` | seated | `TYPING` / `USING_MOUSE` / `READING_SCREEN` / `THINKING` (7 s deterministic blocks) |
+| `IDLE` | seated | `IDLE_SEATED` (breathing, weight shift, slow glances) |
+| `WAITING` | stands beside the desk | `WAITING` (weight on one leg, hands clasped, looks to the door) |
+| `ERROR` | stands beside the desk | `ERROR_REVIEW` (folded arms, slow head shake) |
+| `OFFLINE` | not drawn | empty chair |
+
+The step aside is a real walk: `stepMotion` integrates the distance from the chair at 0.85 m/s, ramps the walk cycle
+in over the first 16 cm, blends sit/stand over 18 cm, and never overshoots. `CharacterAnimator` reads the real frame
+delta (clamped at 100 ms) and drives every registered rig from one `useFrame`.
+
+### Determinism and variety
+
+`hashString(agentId)` (FNV-1a) seeds a mulberry32 stream that picks height, build, skin, hair, clothing, glasses and the
+animation phase. Colour choices come from a bounded office palette (6 skin tones, 6 hair colours, 7 tops, 4 trousers,
+3 shoes), so the crowd reads as one company. Materials are cached by role + colour, keeping a 27-person workforce at
+roughly 25 GPU materials.
+
+### Cost
+
+`npm run stats` reports both tiers: 60 meshes per full-detail character (chair included) and 21 in the compact tier.
+Full detail is used inside a floor or room view; the cutaway overview — where all 27 people share the frame — uses the
+compact rig. The next optimisation target is merging each room's furniture by material, which dominates the cutaway
+budget.

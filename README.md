@@ -67,9 +67,19 @@ still runs and the floor/room navigation, task board and inspector remain fully 
 
 - Strongly typed agent model with stable IDs, role, specialisation, department, room, workstation, status
   (`IDLE | WORKING | WAITING | ERROR | OFFLINE`), current task, last activity and optional execution metadata.
-- Workstation seating is validated (exists, belongs to the room, not double-booked). Agents are rendered as stylised
-  avatars with a restrained status ring; only `WORKING` agents pulse. Room-level activity strips communicate state
-  without adding permanent labels.
+- Workstation seating is validated (exists, belongs to the room, not double-booked).
+- **Miniature humans, not capsules.** Every agent is a jointed figure built from human proportions (7.7 heads, 1.62–1.86 m,
+  anatomically scaled limbs): skull with jaw, nose, ears, eyes and brows, hair (six styles plus optional beard), glasses,
+  shirts/blouses/knits with collars and lapels, ties, jackets, trousers or skirts, shoes, hands with thumbs and fingers,
+  and an ergonomic task chair sized to the occupant's lower leg.
+- Characters are driven by a pure pose engine: seated work (`TYPING`, `USING_MOUSE`, `READING_SCREEN`, `THINKING`),
+  seated idle, standing idle, `WAITING` and `ERROR_REVIEW` with folded arms, plus a walking cycle. Forward kinematics
+  grounds the lowest sole on the floor in every frame, so nobody floats or sinks.
+- Posture follows operations: working and idle agents sit at their desks; agents blocked on a dependency or reviewing a
+  failure stand up, step beside the chair, and sit back down when work resumes. Offline agents leave an empty chair.
+- Appearance is deterministic per agent id, and idle/working phases are desynchronised, so the workforce never breathes
+  or types in lockstep. One shared frame callback updates every rig.
+- Room-level activity strips communicate state without adding permanent labels.
 - Agent status is derived from the task it holds. Operator controls are limited to taking an agent offline / bringing it
   online and clearing an error. Moving an agent is an explicit, validated operation that updates the spatial assignment
   and the rendered position at the same time.
@@ -116,11 +126,13 @@ src/
   data/              # building.json, agents.json, tasks.json (demo fixtures)
   services/execution # demo adapter + live bridge adapter
   store/officeStore.ts # zustand: load, navigation, execution orchestration
-  scene/             # R3F scene: procedural architecture, furniture, avatars,
-                     # camera rig, visibility rules, materials
+  scene/             # R3F scene: procedural architecture, furniture, camera rig,
+                     # visibility rules, materials
+  scene/character/   # miniature humans: appearance, part catalogue, pose engine
+                     # with forward kinematics, behaviour mapping, shared animator
   ui/                # top bar, panels, inspector, status bar, chrome
   app/               # Next.js App Router entry + /api/executions bridge
-tests/               # 112 unit, geometry, scene-graph and store tests
+tests/               # 137 unit, geometry, character, scene-graph and store tests
 scripts/             # fixture validation + scene budget report
 docs/                # architecture, provenance/licensing, implementation report
 ```
@@ -180,12 +192,15 @@ Copy `.env.example` to `.env.local` to configure the bridge. Without it, live mo
 | --- | --- |
 | `tsc --noEmit` | Passes |
 | `next build` | Passes (static `/` + dynamic `/api/executions`) |
-| `npm test` | 112 passed / 112 across 8 files |
+| `npm test` | 137 passed / 137 across 9 files |
 | `npm run validate` | 5 floors, 38 rooms, 65 workstations, no warnings |
 | `GET /api/executions` | `200` `{mode:"unavailable"}` |
 | `POST /api/executions` (unconfigured) | `501 INTEGRATION_UNAVAILABLE` |
 | `POST /api/executions` (invalid body) | `400 INVALID_REQUEST` |
 | Scene graph (headless R3F render) | All 5 floors, cutaway, floor isolation and click navigation render without errors |
+| Characters (headless) | 27 rigs registered and released, a WAITING agent walks 0.45–1.1 m from its chair, a WORKING agent stays seated (tests) |
+| Feet/hands alignment (FK) | Lower sole ≤ 1 mm from the floor in every state/seed/frame; seated wrists at 0.68–0.90 m (desk top 0.74 m) |
+| `npm run stats` | 60 meshes per full-detail colleague, 21 compact; cutaway ≈ 2432 submissions |
 
 **Not verified:** frame rate on real GPU hardware, and visual review in a browser with a real WebGL context (no browser
 is available in the implementation environment). Interactive previews were exercised through the headless scene-graph

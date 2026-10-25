@@ -45,7 +45,8 @@ src/data/{building,agents,tasks}.json
 src/services/execution/{demo,live}.ts
 src/store/officeStore.ts
 src/lib/time.ts
-src/scene/{materials,architecture,facade,camera,visibility,SceneBoxes,Furniture,AgentAvatar,Labels,FloorScene,OfficeScene}.tsx|ts
+src/scene/{materials,architecture,facade,camera,visibility,SceneBoxes,Furniture,Labels,FloorScene,OfficeScene}.tsx|ts
+src/scene/character/{appearance,parts,pose,behaviour,characterMaterials}.ts + {AgentCharacter,characterSystem}.tsx
 src/ui/{AppShell,TopBar,LeftPanel,Inspector,StatusBar,Toast,ViewportChrome,primitives}.tsx
 tests/{space,tasks,operations,architecture,execution,selectors,store,scene}.test.ts(x) + tests/support.ts
 scripts/{validate-building,scene-stats}.ts
@@ -80,22 +81,23 @@ Building "NEXORA Headquarters": 5 floors, 38 rooms, 65 workstations.
 Validation passed (no errors).
 
 $ npx vitest run
-Test Files  8 passed (8)
-     Tests  112 passed (112)
-  Duration  ~4 s
+Test Files  9 passed (9)
+     Tests  137 passed (137)
+  Duration  ~6 s
 
 $ npx next build
 ✓ Compiled successfully
 Route (app)                    Size  First Load JS
-┌ ○ /                       54.6 kB         157 kB
+┌ ○ /                       54.5 kB         157 kB
 ├ ○ /_not-found               994 B         104 kB
 └ ƒ /api/executions           123 B         103 kB
 
 $ npx tsx scripts/scene-stats.ts
 Exterior view                    ~364 draw-call submissions
 Building overview (closed)       ~363
-Cutaway overview (interiors)     ~2214
-Isolated floor (Technology)      ~479
+Cutaway overview (interiors)     ~2432
+Isolated floor (Technology)      ~802
+One colleague                    60 meshes at full detail · 21 at compact detail
 
 $ curl -s localhost:3000/api/executions
 {"mode":"unavailable","label":"No execution service configured", ...}          HTTP 200
@@ -108,7 +110,9 @@ $ curl -X POST -d '{}' localhost:3000/api/executions
 ```
 
 Test coverage by file: space 12, tasks 7, operations 26, architecture 22, execution 9, selectors 10, store 11,
-scene 15 (R3F scene graph: five floors, cutaway, isolation, click navigation, live state updates).
+scene 19 (R3F scene graph: five floors, cutaway, isolation, click navigation, live state updates, character rigs and
+walking), character 21 (appearance determinism, anatomy, ground contact, desk alignment, typing cadence, idle
+restraint, behaviour mapping, locomotion).
 
 ## 6. Build and deployment status
 
@@ -171,3 +175,71 @@ npm run build    # production build
 
 Controls: drag to orbit, scroll to zoom, click a room or avatar. Keyboard: `0` overview, `E` exterior, `1–5` floors,
 `C` cutaway, `R` reset, `⌘K`/`/` search, `Esc` clear, `?` shortcuts.
+
+## 10. Improvement stage 1 — human agents (this iteration)
+
+### What was audited
+
+The previous scene drew each agent as a low cylinder (torso), a sphere (head) and a status ring, plus a two-box chair.
+It was readable at a distance but wrong on three counts the brief is explicit about:
+
+1. Not human: no neck, shoulders, elbows, wrists, hands, hips, knees or feet, and no clothing beyond a coloured mass.
+2. Not anchored: the "chair" was part of the avatar, so a standing or absent agent still had a chair drawn under it.
+3. Not animated: the only motion was a pulsing ring. Nothing communicated typing, reading, waiting or reviewing.
+
+### What was built
+
+| Module | Responsibility |
+| --- | --- |
+| `character/appearance.ts` | Deterministic look per agent id: height 1.62–1.86 m, build, skin, hair style/colour, top, jacket, trousers or skirt, shoes, glasses, beard, animation phase and tempo |
+| `character/parts.ts` | Data catalogue of ~45 body parts and 16 chair parts in two LOD tiers; the renderer and the budget read the same list |
+| `character/pose.ts` | Pure pose engine (seated work, seated idle, standing idle, waiting, error review, walking, sit/stand blend) plus forward kinematics and floor grounding |
+| `character/behaviour.ts` | Agent/task status → posture and activity; deterministic 7 s micro-activity schedule; walk/sit integrator; away-point geometry |
+| `character/characterMaterials.ts` | Role + colour material cache (bounded set shared by the whole workforce) |
+| `character/AgentCharacter.tsx` | Joint hierarchy renderer and the ergonomic task chair |
+| `character/characterSystem.tsx` | Rig registry plus the single `useFrame` that animates all characters |
+
+Integration: `FloorAgents` renders the occupants of a floor once (not nested per room), so a character can leave the
+chair without being re-parented; `SceneWorld` mounts `CharacterAnimator` and selects the detail tier
+(`full` inside a floor/room view, `compact` in the cutaway overview). `AgentAvatar.tsx` was removed.
+
+### Verified for this stage
+
+| Property | How it is verified | Result |
+| --- | --- | --- |
+| No floating or sunken feet | FK sole height for 8 agents × 5 seated states × 3 standing states × 3 blends × 6 timestamps | lower sole within 1 mm of the floor |
+| Hands on the desk, not through it | FK wrist position while typing, 10 agents | 0.68–0.90 m (desk 0.74 m), 0.30–0.55 m forward |
+| Standing height is respected | FK crown height vs seeded height | within 1 cm |
+| Typing uses both hands out of phase | 180 samples of wrist rotation | >90 % anti-phase, amplitude > 0.06 rad, fingers alternate |
+| Idle is restrained | 240 samples × 6 agents | head yaw < 0.45 rad, spine < 0.25 rad, hip drift < 20 mm |
+| Workforce is varied and stable | appearance/orientation sweep over 27 agents | deterministic; ≥4 skins, ≥6 hair combinations, ≥10 outfits |
+| Colour loyalty to the brand palette | palette arrays in `appearance.ts` | no random hex values at runtime |
+| Posture follows operations | status mapping over the real fixture | offline → empty chair; waiting/error → standing beside the desk |
+| Stepping out is a walk, not a teleport | R3F scene test, 150 frames | WAITING agent moves 0.45–1.1 m; WORKING agent < 1 cm |
+| Seated hips sit on the chair | scene test reads the hip group after 90 frames | 0.42–0.58 m |
+| One loop, not 27 | rig registry assertions | 27 handles registered on mount, 0 after unmount |
+| Cost | `npm run stats` | 60 meshes per full colleague, 21 compact; cutaway ≈ 2432 submissions |
+
+### Honest limitations of this stage
+
+- **No browser/WebGL review.** The environment has no GPU. Anatomy, proportions, ground contact and desk alignment are
+  verified numerically (forward kinematics) and the scene graph is verified headlessly, but the final skinning-free
+  look — silhouette, hair readability, clothing contrast at 20 m — has not been judged by eye. The first browser pass
+  should be treated as a design review and will likely adjust materials and proportions.
+- **Locomotion is desk-local.** Characters stand up, step aside and sit down; they do not yet walk across a floor or
+  between floors. There is still no navigation mesh, no door/corridor route and no vertical circulation. The next stage
+  adds the route graph (door → corridor → door) and joins it to `moveAgent`.
+- **No skeletal skinning.** Because the rig is rigid pieces on joints, elbows and knees show a seam under extreme
+  flexion. Poses are clamped to plausible ranges to keep the seams hidden; a skinned GLB could replace the rig without
+  changing the behaviour layer.
+- **The chair cannot roll or swivel.** It is placed at the workstation anchor with the occupant's facing. A swivel
+  animation when a colleague turns to talk is deferred until meeting behaviour exists.
+- **Draw cost per person is high** (60 meshes full detail). This is affordable for 27 people but would need merging or
+  instancing of clothing parts for a larger workforce.
+
+### Next improvement stage (stage 2)
+
+Per the second brief, the next stage audits and refines the architecture, furniture, materials, lighting and camera
+presentation: furniture construction detail (frames, joints, handles, soft edges), workstation equipment layout,
+floor/ceiling trims, interior planting and signage, PBR material tuning, light balance and camera framing. Stage 3 then
+wires the navigation graph so agents can walk the corridor, cross through doors and use the stairs.

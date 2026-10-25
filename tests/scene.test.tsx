@@ -12,6 +12,7 @@ import { SceneBoxes, drawCallCount } from '@/scene/SceneBoxes';
 import { buildFacadeFins, buildFloorFacade, buildSite } from '@/scene/facade';
 import { visibleFloors, sceneLayers } from '@/scene/visibility';
 import { SceneWorld } from '@/scene/OfficeScene';
+import { CharacterAnimator, resetRigs, rigCount } from '@/scene/character/characterSystem';
 import type { OperationsState } from '@/domain/operations';
 import type { Building, ViewMode } from '@/domain/types';
 
@@ -84,7 +85,8 @@ describe('floor scene rendering', () => {
     );
 
     const meshes = renderer.scene.findAllByType('Mesh');
-    // Architecture (walls, doors, slab, lights, furniture) + room hit plates + avatars.
+    // Architecture (walls, doors, slab, lights, furniture) + room hit plates +
+    // detailed characters and their chairs.
     expect(meshes.length).toBeGreaterThan(120);
     await renderer.advanceFrames(3, 0.016);
     await renderer.unmount();
@@ -289,5 +291,169 @@ describe('visibility rules', () => {
     expect(sceneLayers(mutate({ viewMode: 'room' }))).toMatchObject({ showFacade: false });
     expect(sceneLayers(mutate({ viewMode: 'building', cutaway: true })).hiddenFacadeSide).toBe('north');
     expect(sceneLayers(mutate({ viewMode: 'floor' })).hiddenFacadeSide).toBeNull();
+  });
+});
+
+describe('character rendering', () => {
+  beforeAll(() => {
+    (HTMLCanvasElement.prototype as unknown as { getContext: unknown }).getContext = function getContext() {
+      return stubCanvas().getContext();
+    };
+  });
+
+  const techFloor = building.floors[3]!;
+  const occupants = ops.agents.filter((agent) => techFloor.rooms.some((room) => room.id === agent.roomId));
+
+  function seatOf(agentId: string) {
+    const agent = ops.agents.find((candidate) => candidate.id === agentId)!;
+    const room = techFloor.rooms.find((candidate) => candidate.id === agent.roomId)!;
+    return room.workstations.find((station) => station.id === agent.workstationId)!.seat;
+  }
+
+  it('draws a detailed rig and a task chair, with a cheaper tier for the overview', async () => {
+    const compact = await ReactThreeTestRenderer.create(
+      <FloorLiveLayer
+        building={building}
+        floor={techFloor}
+        ops={ops}
+        viewMode="building"
+        selectedRoomId={null}
+        selectedAgentId={null}
+        hoveredRoomId={null}
+        characterDetail="compact"
+        onSelectRoom={() => {}}
+        onHoverRoom={() => {}}
+        onSelectAgent={() => {}}
+      />,
+    );
+    const compactMeshes = compact.scene.findAllByType('Mesh').length;
+    await compact.unmount();
+
+    const full = await ReactThreeTestRenderer.create(
+      <FloorLiveLayer
+        building={building}
+        floor={techFloor}
+        ops={ops}
+        viewMode="building"
+        selectedRoomId={null}
+        selectedAgentId={null}
+        hoveredRoomId={null}
+        characterDetail="full"
+        onSelectRoom={() => {}}
+        onHoverRoom={() => {}}
+        onSelectAgent={() => {}}
+      />,
+    );
+    const fullMeshes = full.scene.findAllByType('Mesh').length;
+    await full.unmount();
+
+    expect(occupants.length).toBeGreaterThan(2);
+    // The full rig is a real human: head, hands, feet, hair, glasses, lapels.
+    expect(fullMeshes - compactMeshes).toBeGreaterThan(occupants.length * 25);
+  });
+
+  it('registers one animation rig per visible colleague and releases it', async () => {
+    resetRigs();
+    const renderer = await ReactThreeTestRenderer.create(
+      <group>
+        <CharacterAnimator />
+        <FloorLiveLayer
+          building={building}
+          floor={techFloor}
+          ops={ops}
+          viewMode="building"
+          selectedRoomId={null}
+          selectedAgentId={null}
+          hoveredRoomId={null}
+          onSelectRoom={() => {}}
+          onHoverRoom={() => {}}
+          onSelectAgent={() => {}}
+        />
+      </group>,
+    );
+    const visible = occupants.filter((agent) => agent.status !== 'OFFLINE').length;
+    expect(visible).toBeGreaterThan(1);
+    expect(rigCount()).toBe(visible);
+    await renderer.advanceFrames(2, 0.016);
+    await renderer.unmount();
+    expect(rigCount()).toBe(0);
+  });
+
+  it('walks a waiting colleague away from the chair while workers stay seated', async () => {
+    const waiting = occupants.find((agent) => agent.status === 'WAITING');
+    const working = occupants.find((agent) => agent.status === 'WORKING');
+    expect(waiting).toBeDefined();
+    expect(working).toBeDefined();
+
+    const renderer = await ReactThreeTestRenderer.create(
+      <group>
+        <CharacterAnimator />
+        <FloorLiveLayer
+          building={building}
+          floor={techFloor}
+          ops={ops}
+          viewMode="building"
+          selectedRoomId={null}
+          selectedAgentId={null}
+          hoveredRoomId={null}
+          onSelectRoom={() => {}}
+          onHoverRoom={() => {}}
+          onSelectAgent={() => {}}
+        />
+      </group>,
+    );
+
+    const byName = (id: string) =>
+      renderer.scene.findAll((node) => node.instance?.name === `character-${id}`)[0];
+    const waitingNode = byName(waiting!.id);
+    const workingNode = byName(working!.id);
+    expect(waitingNode).toBeDefined();
+    expect(workingNode).toBeDefined();
+
+    await renderer.advanceFrames(150, 0.05);
+
+    const waitingSeat = seatOf(waiting!.id);
+    const waitingPos = waitingNode!.instance.position;
+    const moved = Math.hypot(waitingPos.x - waitingSeat.x, waitingPos.z - waitingSeat.z);
+    // Roughly the 0.8 m step beside the desk, walked over several seconds.
+    expect(moved).toBeGreaterThan(0.45);
+    expect(moved).toBeLessThan(1.1);
+
+    const workingSeat = seatOf(working!.id);
+    const workingPos = workingNode!.instance.position;
+    expect(Math.hypot(workingPos.x - workingSeat.x, workingPos.z - workingSeat.z)).toBeLessThan(0.01);
+
+    await renderer.unmount();
+  });
+
+  it('keeps the seated hips on the chair, not floating above it', async () => {
+    const renderer = await ReactThreeTestRenderer.create(
+      <group>
+        <CharacterAnimator />
+        <FloorLiveLayer
+          building={building}
+          floor={techFloor}
+          ops={ops}
+          viewMode="building"
+          selectedRoomId={null}
+          selectedAgentId={null}
+          hoveredRoomId={null}
+          characterDetail="full"
+          onSelectRoom={() => {}}
+          onHoverRoom={() => {}}
+          onSelectAgent={() => {}}
+        />
+      </group>,
+    );
+    const working = occupants.find((agent) => agent.status === 'WORKING')!;
+    const node = renderer.scene.findAll(
+      (candidate) => candidate.instance?.name === `character-${working.id}`,
+    )[0];
+    await renderer.advanceFrames(90, 0.05);
+    const root = node!.instance;
+    const hips = root.children[0]!;
+    expect(hips.position.y).toBeGreaterThan(0.42);
+    expect(hips.position.y).toBeLessThan(0.58);
+    await renderer.unmount();
   });
 });
